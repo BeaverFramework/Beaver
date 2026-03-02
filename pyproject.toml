@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beaver"
+version = "0.1.0"
+description = "BEAVER: Formal verification bounds for LLM generation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "datasets",
+    "numpy",
+    "torch",
+    "transformers",
+    "openai",
+    "tqdm",
+    "pyyaml",
+    "requests",
+    "huggingface-hub",
+    "jsonlines",
+    "matplotlib",
+    "seaborn",
+    "httpx",
+    "pandas",
+    "llguidance",
+    "z3-solver",
+    "vllm>=0.15.1",
+]
+
+[project.optional-dependencies]
+secure-code = ["semgrep"]
+classifiers = ["fastapi", "uvicorn", "pydantic", "detoxify"]
+
+[project.scripts]
+beaver = "beaver.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["beaver*"]
+
+[tool.setuptools.package-data]
+beaver = [
+    "grammars/*.lark",
+    "constraints/insecure_code_detector/**/*",
+    "configs/models/*.yaml",
+]

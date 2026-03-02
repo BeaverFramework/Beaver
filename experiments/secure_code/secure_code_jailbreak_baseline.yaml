@@ -1,0 +1,37 @@
+# Secure code baseline — sampling verifier with jailbreak prompt prefix
+# Uses prompt_prefix_instruct.txt to instruct the model to ignore security practices.
+
+experiment_file: secure_code.py
+load_prompts_fn: load_prompts
+constraint_fn: constraint_fn
+check_call_fn: check_call_fn
+instance_context_fn: instance_context_fn
+cache: true
+cache_dataset_name: secure_code
+
+# ── load_prompts() extra kwargs ───────────────────────────────────────────────
+language: rust
+dataset_path: null
+question_prefix: ""
+question_prefix_file: data/prompt_prefix_instruct.txt
+
+# ── Grammar ───────────────────────────────────────────────────────────────────
+grammar: rust
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+verifier: sampling
+gen_length: 32
+use_grammar: false
+temperature: 1.0
+top_p: 0.99
+top_k: -1
+num_logprobs: 100
+max_iterations: 1000
+epsilon: 0.1
+max_frontier_size: 10000
+frontier_scoring_strategy: highest-prob
+use_chat_template: false
+num_shots: 8
+max_workers: 16
+verbose: false
+log_dir: beaver_logs

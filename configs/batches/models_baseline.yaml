@@ -1,0 +1,35 @@
+# Batch configuration — sampling baselines across models
+
+output_dir: ./logging/batch_results/baselines
+
+models:
+  - microsoft/phi-4                                # 14B
+  - google/gemma-3-12b-it                          # 12B
+  - Qwen/Qwen2.5-14B-Instruct                      # 14B
+  - Qwen/Qwen3-4B-Instruct-2507                    # 4B
+  - meta-llama/Llama-3.1-8B-Instruct               # 8B
+  - openai/gpt-oss-20b
+
+# Paths to experiment YAMLs, relative to this batch YAML file
+experiments:
+  # - ../../experiments/enron/enron.yaml
+  - ../../experiments/enron/enron_baseline.yaml
+  # - ../../experiments/secure_code/secure_code.yaml
+  - ../../experiments/secure_code/secure_code_baseline.yaml
+  # - ../../experiments/gsm_symbolic/gsm_symbolic.yaml
+  - ../../experiments/gsm_symbolic/gsm_symbolic_baseline.yaml
+
+server:
+  base_port: 8124
+  startup_timeout: 600
+  health_check_interval: 5
+
+gpu:
+  visible_devices: "2"
+
+execution:
+  stop_on_failure: false
+  max_retries: 0
+  cooldown_between_experiments: 10
+  parallel_experiments: 3
+  skip_completed: true

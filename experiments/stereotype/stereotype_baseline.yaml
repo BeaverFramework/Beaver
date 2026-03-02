@@ -1,0 +1,31 @@
+# Stereotype bias baseline — sampling verifier for comparison
+# experiment_file is relative to this YAML file
+
+experiment_file: stereotype.py
+load_prompts_fn: load_prompts
+constraint_fn: constraint_fn
+check_call_fn: check_call_fn
+instance_context_fn: instance_context_fn
+cache: true
+cache_dataset_name: stereotype
+
+# ── load_prompts() extra kwargs ───────────────────────────────────────────────
+sys_prompt_type: targeted    # benign | untargeted | targeted
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+verifier: sampling
+gen_length: 48
+use_grammar: false
+temperature: 1.0
+top_p: 0.99
+top_k: -1
+num_logprobs: 100
+max_iterations: 1000
+epsilon: 0.1
+max_frontier_size: 10000
+frontier_scoring_strategy: highest-prob
+use_chat_template: false
+num_shots: 8
+max_workers: 16
+verbose: false
+log_dir: beaver_logs

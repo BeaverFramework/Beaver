@@ -1,0 +1,31 @@
+# Batch configuration — toxicity experiments (frontier + baseline)
+
+output_dir: ./logging/batch_results/toxicity_experiments_chat_template
+
+models:
+  - microsoft/phi-4                                # 14B
+  - google/gemma-3-12b-it                          # 12B
+  - openai/gpt-oss-20b
+  - Qwen/Qwen2.5-14B-Instruct                      # 14B
+  - meta-llama/Llama-3.1-8B-Instruct               # 8B
+  - Qwen/Qwen3-4B-Instruct-2507                    # 4B
+
+# Paths to experiment YAMLs, relative to this batch YAML file
+experiments:
+  - ../../experiments/toxicity/toxicity.yaml
+  - ../../experiments/toxicity/toxicity_baseline.yaml
+
+server:
+  base_port: 8080
+  startup_timeout: 600
+  health_check_interval: 5
+
+gpu:
+  visible_devices: "1"
+
+execution:
+  stop_on_failure: true
+  max_retries: 0
+  cooldown_between_experiments: 10
+  parallel_experiments: 2
+  skip_completed: true

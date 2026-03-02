@@ -1,0 +1,13 @@
+*.pyc
+__pycache__/
+src/logging/
+src/batch_results/
+src/logging_real/
+src/__pycache__/
+src/cache/
+src/temp/
+src/*_plots/
+src/iter_cache/
+src/checkpoints/
+beaver_logs/
+logging/

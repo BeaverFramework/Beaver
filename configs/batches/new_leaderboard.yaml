@@ -1,0 +1,203 @@
+# Batch configuration — broad open-source model leaderboard
+# Instruction-tuned, non-reasoning models
+# Uncomment the models you want to run
+
+output_dir: ./logging/batch_results/new_leaderboard
+
+models:
+    # ── Meta — Llama ─────────────────────────────────────────────────────────────
+    # - meta-llama/Llama-3.2-1B-Instruct              # 1B
+    - meta-llama/Llama-3.2-3B-Instruct # 3B
+    - meta-llama/Llama-3.1-8B-Instruct # 8B
+    # - meta-llama/Llama-3.1-70B-Instruct             # 70B
+    # - meta-llama/Llama-3.3-70B-Instruct             # 70B
+    # - meta-llama/Llama-3.1-405B-Instruct            # 405B
+    # - meta-llama/Llama-4-Scout-17B-16E-Instruct     # 17B active (109B total, MoE)
+    # - meta-llama/Llama-4-Maverick-17B-128E-Instruct # 17B active (400B total, MoE)
+
+    # ── Alibaba — Qwen 2.5 ───────────────────────────────────────────────────────
+    # - Qwen/Qwen2.5-0.5B-Instruct                    # 0.5B
+    # - Qwen/Qwen2.5-1.5B-Instruct                    # 1.5B
+    # - Qwen/Qwen2.5-3B-Instruct                      # 3B
+    # - Qwen/Qwen2.5-7B-Instruct # 7B
+    # - Qwen/Qwen2.5-14B-Instruct # 14B
+    # - Qwen/Qwen2.5-32B-Instruct                     # 32B
+    # - Qwen/Qwen2.5-72B-Instruct                     # 72B
+
+    # ── Alibaba — Qwen 3 (thinking-disabled / no_think) ─────────────────────────
+    # - Qwen/Qwen3-0.6B                               # 0.6B
+    # - Qwen/Qwen3-1.7B                               # 1.7B
+    # - Qwen/Qwen3-4B                                 # 4B
+    - Qwen/Qwen3-8B # 8B
+    - Qwen/Qwen3-14B # 14B
+    # - Qwen/Qwen3-32B                                # 32B
+    # - Qwen/Qwen3-30B-A3B                            # 3B active (30B total, MoE)
+    # - Qwen/Qwen3-235B-A22B                          # 22B active (235B total, MoE)
+
+    # ── Alibaba — Qwen 3 Instruct-2507 (non-thinking only) ──────────────────────
+    - Qwen/Qwen3-4B-Instruct-2507 # 4B
+    # - Qwen/Qwen3-30B-A3B-Instruct-2507 # 3B active (30B total, MoE)
+    # - Qwen/Qwen3-235B-A22B-Instruct-2507           # 22B active (235B total, MoE)
+
+    # ── Alibaba — Qwen 3 Coder ───────────────────────────────────────────────────
+    # - Qwen/Qwen3-Coder-480B-A35B-Instruct          # 35B active (480B total, MoE)
+
+    # ── Alibaba — Qwen3-Next (non-thinking only) ─────────────────────────────────
+    # - Qwen/Qwen3-Next-80B-A3B-Instruct             # 3B active (80B total, Hybrid MoE)
+
+    # ── Alibaba — Qwen 3.5 (thinking-disabled) ───────────────────────────────────
+    # - Qwen/Qwen3.5-27B # 27B
+    # - Qwen/Qwen3.5-35B-A3B # 3B active (35B total, Hybrid MoE)
+    # - Qwen/Qwen3.5-122B-A10B                       # 10B active (122B total, Hybrid MoE)
+    # - Qwen/Qwen3.5-397B-A17B                       # 17B active (397B total, Hybrid MoE)
+
+    # ── Google — Gemma 2 ─────────────────────────────────────────────────────────
+    # - google/gemma-2-2b-it                         # 2B
+    # - google/gemma-2-9b-it                         # 9B
+    # - google/gemma-2-27b-it                        # 27B
+
+    # ── Google — Gemma 3 ─────────────────────────────────────────────────────────
+    # - google/gemma-3-1b-it                         # 1B
+    - google/gemma-3-4b-it # 4B
+    - google/gemma-3-12b-it # 12B
+    - google/gemma-3-27b-it # 27B
+
+    # ── Google — Gemma 3n ────────────────────────────────────────────────────────
+    # - google/gemma-3n-E2B-it                       # ~2B eff.
+    # - google/gemma-3n-E4B-it # ~4B eff.
+
+    # ── Microsoft — Phi ──────────────────────────────────────────────────────────
+    # - microsoft/Phi-3-mini-128k-instruct           # 3.8B
+    # - microsoft/Phi-3.5-mini-instruct              # 3.8B
+    # - microsoft/Phi-3-medium-128k-instruct # 14B
+    - microsoft/Phi-4-mini-instruct # 3.8B
+    - microsoft/phi-4 # 14B
+
+    # ── Mistral AI — Dense ───────────────────────────────────────────────────────
+    - mistralai/Mistral-7B-Instruct-v0.3 # 7B
+    - mistralai/Mistral-Nemo-Instruct-2407 # 12B
+    # - mistralai/Mistral-Small-3.1-24B-Instruct-2503 # 24B
+
+    # ── Mistral AI — Mixtral (MoE) ───────────────────────────────────────────────
+    # - mistralai/Mixtral-8x7B-Instruct-v0.1        # 13B active (47B total, MoE)
+    # - mistralai/Mixtral-8x22B-Instruct-v0.1       # 39B active (141B total, MoE)
+
+    # ── Mistral AI — Mistral Large ───────────────────────────────────────────────
+    # - mistralai/Mistral-Large-Instruct-2407        # 123B
+    # - mistralai/Mistral-Large-Instruct-2411        # 123B
+
+    # ── Mistral AI — Ministral 3 / Large 3 ──────────────────────────────────────
+    # - mistralai/Ministral-3-3B-Instruct            # 3B
+    # - mistralai/Ministral-3-8B-Instruct # 8B
+    # - mistralai/Ministral-3-14B-Instruct # 14B
+    # - mistralai/Mistral-Large-3-Instruct           # 41B active (675B total, MoE)
+
+    # ── DeepSeek ─────────────────────────────────────────────────────────────────
+    # - deepseek-ai/DeepSeek-V2.5                   # 21B active (236B total, MoE)
+    # - deepseek-ai/DeepSeek-V3                     # 37B active (671B total, MoE)
+    # - deepseek-ai/DeepSeek-V3-0324               # 37B active (671B total, MoE)
+    # - deepseek-ai/DeepSeek-V3.1                  # 37B active (671B total, MoE)
+    # - deepseek-ai/DeepSeek-V3.2                  # 37B active (685B total, MoE)  [thinking-disabled]
+    # - deepseek-ai/DeepSeek-V3.2-Speciale         # 37B active (685B total, MoE)
+
+    # ── Zhipu/Z AI — GLM ─────────────────────────────────────────────────────────
+    # - THUDM/glm-4-9b-chat                         # 9B
+    # - THUDM/GLM-4.5-9B-Chat                       # 9B
+    # - THUDM/GLM-4.7                               # 32B active (355B total, MoE)  [thinking-disabled]
+    # - zai-org/GLM-5                               # 40B active (744B total, MoE)  [thinking-disabled]
+
+    # ── Xiaomi — MiMo ────────────────────────────────────────────────────────────
+    # - XiaomiMiMo/MiMo-V2-Flash                    # 15B active (309B total, MoE)
+
+    # ── Moonshot AI — Kimi ───────────────────────────────────────────────────────
+    # - moonshotai/Kimi-K2-Instruct                 # 32B active (1T total, MoE)
+    # - moonshotai/Kimi-K2.5                        # 32B active (1T total, MoE)  [thinking-disabled]
+
+    # ── MiniMax ──────────────────────────────────────────────────────────────────
+    # - MiniMaxAI/MiniMax-M1-80k                    # 10B active (230B total, MoE)  [M2.1]
+
+    # ── Cohere — Command ─────────────────────────────────────────────────────────
+    # - CohereForAI/c4ai-command-r7b-12-2024        # 7B
+    # - CohereForAI/c4ai-command-r-08-2024          # 35B
+    # - CohereForAI/c4ai-command-r-plus-08-2024     # 104B
+    # - CohereForAI/c4ai-command-a-03-2025          # 13B active (111B total, MoE)
+
+    # ── LG AI — EXAONE 3.5 ───────────────────────────────────────────────────────
+    # - LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct        # 2.4B
+    # - LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct        # 7.8B
+    # - LGAI-EXAONE/EXAONE-3.5-32B-Instruct         # 32B
+
+    # ── LG AI — EXAONE 4.0 (thinking-disabled) ───────────────────────────────────
+    # - LGAI-EXAONE/EXAONE-4.0-1.2B                 # 1.2B
+    # - LGAI-EXAONE/EXAONE-4.0-32B                  # 32B
+
+    # ── LG AI — K-EXAONE ─────────────────────────────────────────────────────────
+    # - LGAI-EXAONE/K-EXAONE                        # 23B active (236B total, MoE)
+
+    # ── TII — Falcon 3 ───────────────────────────────────────────────────────────
+    # - tiiuae/Falcon3-1B-Instruct                  # 1B
+    # - tiiuae/Falcon3-3B-Instruct                  # 3B
+    # - tiiuae/Falcon3-7B-Instruct                  # 7B
+    # - tiiuae/Falcon3-10B-Instruct                 # 10B
+
+    # ── 01.AI — Yi ───────────────────────────────────────────────────────────────
+    # - 01-ai/Yi-1.5-6B-Chat                        # 6B
+    # - 01-ai/Yi-1.5-9B-Chat                        # 9B
+    # - 01-ai/Yi-1.5-34B-Chat                       # 34B
+
+    # ── Allen AI — OLMo ──────────────────────────────────────────────────────────
+    # - allenai/OLMo-2-7B-Instruct                  # 7B
+    # - allenai/OLMo-2-13B-Instruct                 # 13B
+    # - allenai/OLMo-3-1B-Instruct # 1B
+    - allenai/OLMo-3-7B-Instruct # 7B
+    - allenai/Olmo-3.1-32B-Instruct
+
+    # ── NVIDIA — Nemotron ────────────────────────────────────────────────────────
+    # - nvidia/Llama-3.1-Nemotron-70B-Instruct-HF   # 70B
+    # - nvidia/Llama-3_3-Nemotron-Super-49B-v1      # 49B  [thinking-disabled]
+    # - nvidia/Llama-3_1-Nemotron-Ultra-253B-v1     # 253B  [thinking-disabled]
+    # - nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16  # 3.5B active (30B total, Hybrid MoE)  [thinking-disabled]
+
+    # ── OpenAI — GPT-OSS ─────────────────────────────────────────────────────────
+    - openai/gpt-oss-20b # 20B
+    # - openai/gpt-oss-120b                         # 120B
+
+    # ── Essential AI — Rnj ───────────────────────────────────────────────────────
+    # - essentialai/rnj-1-8b-instruct               # 8B
+
+    # ── Arcee AI — Trinity ───────────────────────────────────────────────────────
+    # - arcee-ai/Trinity-Nano-Preview               # 1B active (6B total, MoE)
+    # - arcee-ai/Trinity-Mini                       # 3B active (26B total, MoE)
+    # - arcee-ai/Trinity-Large-Preview              # 13B active (398B total, MoE)
+
+    # ── IBM — Granite ────────────────────────────────────────────────────────────
+    # - ibm-granite/granite-3.1-2b-instruct # 2B
+    # - ibm-granite/granite-3.1-8b-instruct # 8B
+
+# Paths to experiment YAMLs, relative to this batch YAML file
+experiments:
+    - ../../experiments/enron/enron.yaml
+    # - ../../experiments/enron/enron_baseline.yaml
+    - ../../experiments/secure_code/secure_code.yaml
+    # - ../../experiments/secure_code/secure_code_baseline.yaml
+    # - ../../experiments/gsm_symbolic/gsm_symbolic.yaml
+    # - ../../experiments/gsm_symbolic/gsm_symbolic_baseline.yaml
+    - ../../experiments/toxicity/toxicity.yaml
+    # - ../../experiments/toxicity/toxicity_baseline.yaml
+    - ../../experiments/stereotype/stereotype.yaml
+    # - ../../experiments/stereotype/stereotype_baseline.yaml
+
+server:
+    base_port: 8132
+    startup_timeout: 600
+    health_check_interval: 5
+
+gpu:
+    visible_devices: "0,1"
+
+execution:
+    stop_on_failure: false
+    max_retries: 0
+    cooldown_between_experiments: 10
+    parallel_experiments: 2
+    skip_completed: true

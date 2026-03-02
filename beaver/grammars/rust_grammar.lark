@@ -1,0 +1,227 @@
+// Rust grammar for llguidance (converted from rust.bnf)
+// Supports core Rust syntax with optional markdown code blocks
+
+// Main start rule with optional markdown code blocks
+start: [leading_junk] [code_block_start] ["\n"] item (item)* [code_block_end]
+
+// Markdown code block delimiters
+code_block_start: "```" "rust" | "```rust"
+code_block_end: "```"
+// Allow up to 3 characters total (space, dot, or symbol) before code block
+leading_junk: /[\.\s!]{0,3}/
+
+// Items (top-level declarations)
+item: outer_attr* vis? (function | struct_item | enum_item | trait_item | impl_item | type_alias | const_item | static_item | mod_item | use_item | extern_crate | extern_block | macro_call)
+
+// Visibility
+vis: "pub" ["(" ("crate" | "super" | "self" | "in" path) ")"]
+
+// Functions (made more lenient to accept incomplete code)
+function: ["async"] ["const"] ["unsafe"] ["extern" [abi]] "fn" IDENT [generic_params] ["(" [param_list] ")"] ["->" type_ref] [where_clause] [block | ";"]
+
+param_list: param ("," param)* ","?
+param: self_param | ["mut"] IDENT ":" type_ref
+self_param: ["&" [lifetime]] ["mut"] "self"
+
+// Struct (made more lenient)
+struct_item: "struct" IDENT [generic_params] [tuple_fields | block_fields | ";"] [where_clause]
+
+tuple_fields: "(" [tuple_field ("," tuple_field)* ","?] ")" [";"]
+tuple_field: outer_attr* vis? type_ref
+
+block_fields: [where_clause] ["{" [field_def ("," field_def)* ","?] "}"]
+field_def: outer_attr* vis? IDENT [":" type_ref]
+
+// Enum (made more lenient)
+enum_item: "enum" IDENT [generic_params] [where_clause] ["{" [variant ("," variant)* ","?] "}"]
+
+variant: outer_attr* IDENT [tuple_fields_inline | block_fields] ["=" expr]
+tuple_fields_inline: "(" [type_ref ("," type_ref)* ","?] ")"
+
+// Trait
+trait_item: ["unsafe"] "trait" IDENT [generic_params] [":" type_bounds] [where_clause] "{" trait_member* "}"
+
+trait_member: outer_attr* (trait_fn | trait_type | trait_const)
+trait_fn: ["async"] ["const"] ["unsafe"] "fn" IDENT [generic_params] "(" [param_list] ")" ["->" type_ref] [where_clause] (";" | block)
+trait_type: "type" IDENT [generic_params] [":" type_bounds] ["=" type_ref] ";"
+trait_const: "const" IDENT ":" type_ref ["=" expr] ";"
+
+// Impl
+impl_item: ["unsafe"] "impl" [generic_params] [trait_path "for"] type_ref [where_clause] "{" impl_member* "}"
+
+impl_member: outer_attr* vis? (function | type_alias | const_item)
+
+// Type alias
+type_alias: "type" IDENT [generic_params] [":" type_bounds] [where_clause] ["=" type_ref] ";"
+
+// Constants and statics
+const_item: "const" IDENT ":" type_ref ["=" expr] ";"
+static_item: "static" ["mut"] IDENT ":" type_ref ["=" expr] ";"
+
+// Modules
+mod_item: "mod" IDENT (";" | "{" inner_attr* item* "}")
+
+// Use declarations (made more lenient)
+use_item: "use" [use_tree] [";"]
+use_tree: ["::" | path "::"] (IDENT | "*" | "{" use_tree ("," use_tree)* ","? "}") | path ["as" IDENT]
+
+// Extern crate and blocks
+extern_crate: "extern" "crate" IDENT ["as" IDENT] ";"
+extern_block: "extern" [abi] (("{" inner_attr* extern_item* "}") | (LBRACE_NL inner_attr* extern_item* "}"))
+extern_item: outer_attr* vis? (function | static_item)
+
+// Generic parameters
+generic_params: "<" generic_param ("," generic_param)* ","? ">"
+generic_param: lifetime | IDENT [":" type_bounds] ["=" type_ref] | "const" IDENT ":" type_ref
+
+// Where clause
+where_clause: "where" where_pred ("," where_pred)* ","?
+where_pred: lifetime ":" lifetime ("+" lifetime)* | type_ref ":" type_bounds
+
+// Type bounds
+type_bounds: type_bound ("+" type_bound)* "+"?
+type_bound: ["?"] (trait_ref | lifetime)
+trait_ref: path [fn_style_args | type_args_brackets]
+
+// Types
+type_ref: ref_type | ptr_type | array_type | tuple_type | path_type | fn_type | impl_trait | dyn_trait | "(" type_ref ")" | "_" | "!"
+
+ref_type: "&" [lifetime] ["mut"] type_ref
+ptr_type: "*" ("const" | "mut") type_ref
+array_type: "[" type_ref [";" expr] "]"
+tuple_type: ("(" [type_ref ("," type_ref)* ","?] ")") | LPAREN_RPAREN
+path_type: path [fn_style_args | type_args_brackets]
+type_args_brackets: ("<" | TURBOFISH) type_args ">"
+fn_style_args: (fn_args_normal | fn_args_with_amp) ["->" type_ref]
+fn_args_normal: "(" [type_ref ("," type_ref)* ","?] ")"
+fn_args_with_amp: LPAREN_AMP [amp_type_rest] ("," type_ref)* ","? ")"
+amp_type_rest: [lifetime] ["mut"] type_ref
+fn_type: ["unsafe"] ["extern" [abi]] "fn" "(" [type_ref ("," type_ref)* ","?] ")" ["->" type_ref]
+impl_trait: "impl" type_bounds
+dyn_trait: "dyn" type_bounds
+
+type_args: type_arg ("," type_arg)* ","?
+type_arg: type_ref | lifetime | IDENT "=" type_ref | const_arg
+const_arg: INTEGER | literal_expr
+
+// Paths (made more lenient to accept incomplete paths like "foo::")
+path: "::"? path_segment ("::" [path_segment])*
+path_segment: IDENT | "self" | "super" | "crate" | "Self"
+trait_path: path
+
+// Expressions  
+expr: assignment_expr | binary_expr | unary_expr | cast_expr | try_expr | call_expr | method_call_expr | field_expr | index_expr | simple_range_expr | range_expr | closure_expr | if_expr | match_expr | loop_expr | while_expr | for_expr | block_expr | return_expr | break_expr | continue_expr | macro_expr | struct_expr | tuple_expr | array_expr | paren_expr | atomic_expr
+
+// Simple range expression for common cases like 0..10 or x..y (no complex left-recursive exprs)
+simple_range_expr: atomic_expr (".." | "..=" | DOTDOT) [atomic_expr]
+
+// Atomic expressions (literals, identifiers, paths - things that can't be broken down further)
+atomic_expr: literal_expr | path_expr
+
+// Assignment and binary operators (simplified precedence)
+assignment_expr: expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=") expr
+binary_expr: expr ("||" | "&&" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>") expr
+
+unary_expr: ("-" | "!" | "*" | "&" ["mut"] | "box") expr
+cast_expr: expr "as" type_ref
+try_expr: expr "?"
+call_expr: expr [type_args_brackets] (("(" [expr ("," expr)* ","?] ")") | LPAREN_RPAREN)
+method_call_expr: expr "." IDENT [type_args_brackets] (("(" [expr ("," expr)* ","?] ")") | LPAREN_RPAREN)
+field_expr: expr "." (IDENT | INTEGER)
+index_expr: expr "[" index_content "]"
+index_content: expr | range_in_index
+range_in_index: [expr] (".." | "..=" | DOTDOT) [expr]
+range_expr: [expr] (".." | "..=" | DOTDOT) [expr]
+
+closure_expr: ["move"] "|" [closure_param ("," closure_param)*] "|" ["->" type_ref] expr
+closure_param: IDENT [":" type_ref]
+
+if_expr: "if" ["let" pattern "="] expr block ["else" (if_expr | block)]
+match_expr: "match" expr "{" match_arm* "}"
+match_arm: outer_attr* pattern ["if" expr] "=>" (expr ","? | block)
+
+loop_expr: ["'" IDENT ":"] "loop" block
+while_expr: ["'" IDENT ":"] "while" expr block
+for_expr: ["'" IDENT ":"] "for" pattern "in" expr block
+
+block_expr: ("unsafe" | "async") (block | (LBRACE_NL inner_attr* stmt* [expr] "}")) | block
+return_expr: "return" [expr]
+break_expr: "break" ["'" IDENT] [expr]
+continue_expr: "continue" ["'" IDENT]
+
+literal_expr: STRING | CHAR | (INTEGER [INT_SUFFIX]) | FLOAT | "true" | "false"
+path_expr: path
+struct_expr: path "{" [field_init ("," field_init)* ","?] [".." expr] "}"
+field_init: IDENT [":" expr]
+tuple_expr: "(" [expr ("," expr)+ ","?] [")"]
+array_expr: "[" [expr ("," expr)* ","? | expr ";" expr] ["]"]
+paren_expr: "(" expr [")"]
+
+// Block and statements (made more lenient)
+block: "{" inner_attr* stmt* [expr] ["}"]
+
+stmt: let_stmt | expr_stmt | item
+let_stmt: "let" pattern [":" type_ref] ["=" expr] [";"]
+expr_stmt: expr_with_block | expr [";" | QUESTION_SEMI]
+expr_with_block: if_expr | match_expr | loop_expr | while_expr | for_expr | block_expr
+
+// Patterns
+pattern: literal_pattern | ident_pattern | wildcard_pattern | rest_pattern | ref_pattern | tuple_pattern | struct_pattern | tuple_struct_pattern | path_pattern | or_pattern | range_pattern
+
+literal_pattern: STRING | CHAR | INTEGER | FLOAT | "true" | "false"
+ident_pattern: ["ref"] ["mut"] IDENT ["@" pattern]
+wildcard_pattern: "_"
+rest_pattern: ".."
+ref_pattern: "&" ["mut"] pattern
+tuple_pattern: "(" [pattern ("," pattern)* ","?] ")"
+struct_pattern: path "{" [field_pattern ("," field_pattern)* ","?] [".." ] "}"
+field_pattern: IDENT [":" pattern]
+tuple_struct_pattern: path "(" [pattern ("," pattern)* ","?] ")"
+path_pattern: path
+or_pattern: pattern ("|" pattern)+
+range_pattern: [literal_pattern] (".." | "..=") [literal_pattern]
+
+// Macro calls (simplified)
+macro_call: path "!" IDENT? macro_args [";"?]
+macro_expr: path "!" IDENT? macro_args
+macro_args: macro_parens | macro_brackets | macro_braces
+macro_parens: "(" macro_token* ")"
+macro_brackets: "[" macro_token* "]"
+macro_braces: "{" macro_token* "}"
+macro_token: IDENT | INTEGER | FLOAT | STRING | CHAR | "=" | "," | ":" | "::" | "." | ".." | ";" | "->" | "=>" | "<" | ">" | "&" | "*" | "+" | "-" | "/" | "%" | "!" | "|" | "^" | "?" | "@" | "#" | "$" | "~" | "`" | "(" macro_token* ")" | "[" macro_token* "]" | "{" macro_token* "}"
+
+// Attributes
+outer_attr: "#" "[" attr_content "]"
+inner_attr: "#" "!" "[" attr_content "]"
+attr_content: path ["=" STRING | "(" attr_token* ")"]
+attr_token: IDENT | INTEGER | STRING | "=" | "," | "::" | ":" | "."
+
+// Lifetimes
+lifetime: LIFETIME
+
+// Tokens
+IDENT: /[a-zA-Z_][a-zA-Z0-9_]*/
+LIFETIME: /'[a-zA-Z_][a-zA-Z0-9_]*/
+INTEGER: /0|[1-9][0-9]*|0x[0-9a-fA-F]+|0o[0-7]+|0b[01]+/
+INT_SUFFIX: /[ui](8|16|32|64|128|size)/
+FLOAT: /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+/
+CHAR: /'([^'\\]|\\.)*'?/
+STRING: /"([^"\\]|\\.)*"?/
+abi: STRING
+
+// Common token combinations from BPE tokenizer  
+LPAREN_AMP: "(&"
+QUESTION_SEMI: "?;"
+DOT_NL: /\.\n+/
+LBRACE_NL: / \{\n/
+TURBOFISH: "::<"
+DOTDOT: ".."
+LPAREN_RPAREN: "()"
+GT_GT_COLON_COLON: ">>::"
+
+COMMENT: /\/\/[^\n]*/ | /\/\*([^*]|\*[^\/])*\*\//
+_NL: /[\r\n]+/
+
+%ignore /[ \t\r\n]+/
+%ignore COMMENT
+

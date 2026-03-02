@@ -1,0 +1,24 @@
+# Default model server configuration
+# Per-model files only need to specify 'model' and any overrides.
+# All values here come from launch_vllm_server.py defaults + common flags.
+
+server_type: vllm
+
+# Server binding
+host: "0.0.0.0"
+port: 8081
+
+# vLLM-specific settings
+vllm:
+  tensor_parallel_size: auto # "auto" = use all available GPUs
+  max_model_len: 4092
+  gpu_memory_utilization: 0.85
+  enable_prefix_caching: true
+  # enable_chunked_prefill: true
+  # max_num_batched_tokens: 8192
+  max_num_seqs: 256
+  max_logprobs: -1 # REQUIRED: Enable full vocabulary logprobs
+  logprobs_mode: processed_logprobs # Return processed logprobs
+  return_tokens_as_token_ids: true # Return token IDs in token_id:123 format
+  trust_remote_code: true
+  # enforce_eager: true

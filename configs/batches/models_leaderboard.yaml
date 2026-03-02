@@ -1,0 +1,71 @@
+# Batch configuration — broad open-source model leaderboard
+# Instruction-tuned, non-reasoning models, 1B–40B parameters
+
+output_dir: ./logging/batch_results/model_leaderboard
+
+models:
+  # ── Microsoft Phi ────────────────────────────────────────────────
+  # - microsoft/Phi-3-mini-128k-instruct           # 3.8B
+  # - microsoft/Phi-3-small-128k-instruct          # 7B
+  # - microsoft/Phi-3-medium-128k-instruct           # 14B
+  # - microsoft/Phi-3.5-mini-instruct                # 3.8B
+  - microsoft/Phi-4-mini-instruct # 3.8B
+  - microsoft/phi-4 # 14B
+
+  # ── Google Gemma ─────────────────────────────────────────────────
+  # - google/gemma-2-2b-it                         # 2.6B
+  # - google/gemma-2-9b-it                         # 9B
+  # - google/gemma-2-27b-it                        # 27B
+  # - google/gemma-3-1b-it                         # 1B
+  - google/gemma-3-4b-it # 4B
+  - google/gemma-3-12b-it # 12B
+  # - google/gemma-3-27b-it                          # 27B
+
+  # ── Qwen 2.5 (Alibaba) ──────────────────────────────────────────
+  - Qwen/Qwen2.5-7B-Instruct # 7B
+  - Qwen/Qwen2.5-14B-Instruct # 14B
+
+  # ── Qwen 3 ──────────────────────────────────────────────────────
+  - Qwen/Qwen3-4B-Instruct-2507 # 4B
+  # - Qwen/Qwen3-30B-A3B-Instruct-2507              # 3B active / 30B total (MoE)
+
+  # ── Meta Llama ───────────────────────────────────────────────────
+  - meta-llama/Llama-3.1-8B-Instruct # 8B
+
+  # ── Mistral AI ───────────────────────────────────────────────────
+  # - mistralai/Ministral-3-14B-Instruct-2512
+  # - mistralai/Ministral-3-8B-Instruct-2512
+
+  # ── NVIDIA ───────────────────────────────────────────────────────
+  # - nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+
+  # ── OpenAI OSS ───────────────────────────────────────────────────
+  - openai/gpt-oss-20b
+
+# Paths to experiment YAMLs, relative to this batch YAML file
+experiments:
+  - ../../experiments/enron/enron.yaml
+  # - ../../experiments/enron/enron_baseline.yaml
+  - ../../experiments/secure_code/secure_code.yaml
+  # - ../../experiments/secure_code/secure_code_baseline.yaml
+  # - ../../experiments/gsm_symbolic/gsm_symbolic.yaml
+  # - ../../experiments/gsm_symbolic/gsm_symbolic_baseline.yaml
+  - ../../experiments/toxicity/toxicity.yaml
+  # - ../../experiments/toxicity/toxicity_baseline.yaml
+  - ../../experiments/stereotype/stereotype.yaml
+  # - ../../experiments/stereotype/stereotype_baseline.yaml
+
+server:
+  base_port: 8132
+  startup_timeout: 600
+  health_check_interval: 5
+
+gpu:
+  visible_devices: "1"
+
+execution:
+  stop_on_failure: false
+  max_retries: 0
+  cooldown_between_experiments: 10
+  parallel_experiments: 2
+  skip_completed: true

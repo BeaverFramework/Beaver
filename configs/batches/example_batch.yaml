@@ -1,0 +1,31 @@
+# Example batch configuration
+# experiments: list of paths to experiment YAMLs (relative to this file)
+
+output_dir: ./logging/batch_results_test
+
+models:
+  # - meta-llama/Llama-3.2-3B-Instruct
+  - google/gemma-3-27b-it
+
+# Paths to experiment YAMLs, relative to this batch YAML file
+experiments:
+  - ../../experiments/enron/enron.yaml
+  # - ../../experiments/secure_code/secure_code.yaml
+  # - ../../experiments/gsm_symbolic/gsm_symbolic.yaml
+  # - ../../experiments/toxicity/toxicity.yaml
+  # - ../../experiments/stereotype/stereotype.yaml
+
+server:
+  base_port: 8080
+  startup_timeout: 600
+  health_check_interval: 5
+
+gpu:
+  visible_devices: "1,2"
+
+execution:
+  stop_on_failure: true
+  max_retries: 0
+  cooldown_between_experiments: 10
+  parallel_experiments: 1
+  skip_completed: false
