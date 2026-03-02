@@ -1,0 +1,19 @@
+# Core
+numpy
+torch
+transformers
+huggingface_hub
+pyyaml
+requests
+httpx
+openai          # vLLM exposes an OpenAI-compatible API
+tqdm
+jsonlines
+vllm           # vLLM is the underlying inference engine; BEAVER uses its Python API
+
+# Visualization (used by beaver logs)
+matplotlib
+seaborn
+
+# Grammar masking (optional — only needed if use_grammar=True)
+# llguidance
