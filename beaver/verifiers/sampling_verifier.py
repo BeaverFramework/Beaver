@@ -85,7 +85,7 @@ def _worker_process_instance(args):
 
         # Log transition
         transition_info = {
-            "transition": total_transitions + len(token_ids),
+            "transition": total_transitions,
             "expanded element": token_ids,
             "decoded element": decoded_text,
             "upper_bound": upper_bound,
@@ -109,13 +109,7 @@ def _worker_process_instance(args):
         )
 
         if _w.verbose:
-            print(
-                f"Instance {instance['idx']} transition: "
-                f"{total_transitions + len(token_ids)} "
-                f"incomplete_prob: {upper_bound - lower_bound} "
-                f"complete_prob: {lower_bound} "
-                f"current_sequence_prob: {total_seq_prob}"
-            )
+            print(json.dumps(transition_info, indent=2))
 
         gap = upper_bound - lower_bound
         if gap < _w.epsilon:
@@ -123,7 +117,7 @@ def _worker_process_instance(args):
 
     return {
         "idx": instance["idx"],
-        "transitions": total_transitions,
+        "transition": total_transitions,
         "time_s": time.time() - instance_start,
         "sequences": sequences_completed,
         "lower_bound": lower_bound,

@@ -35,7 +35,7 @@
 
 ## ⚙️ Requirements
 
-- Python 3.13+
+- Python 3.10+
 - A CUDA-capable GPU (vLLM does not run on CPU)
 - [vLLM](https://github.com/vllm-project/vllm) installed and accessible on `PATH`
 
@@ -53,7 +53,7 @@ BEAVER can be used in two ways: as a **Python API** or as a **CLI tool**.
 
 BEAVER uses [vLLM](https://github.com/vllm-project/vllm) to serve models. You have two options:
 
-**Option 1 — Automatic server (`auto_server=True`)**
+**Option 1 — Automatic server (`auto_server=True`) (Recommended)**
 
 Pass `auto_server=True` to `beaver.run()` (or `--auto_server` on the CLI) and BEAVER will start and stop the vLLM server for you, using the default flags from `beaver/configs/models/default.yaml`.
 
@@ -94,7 +94,7 @@ results = beaver.run(
     epsilon=0.05,
 )
 
-# Each result: {"idx": 0, "lower_bound": 0.91, "upper_bound": 0.97, "transitions": 42, ...}
+# Each result: {"idx": 0, "lower_bound": 0.91, "upper_bound": 0.97, "transition": 42, ...}
 ```
 
 ```python
@@ -106,17 +106,6 @@ results = beaver.run(
     server_addr="http://localhost:8091",
     gen_length=64,
     epsilon=0.05,
-)
-```
-
-### Built-in dataset
-
-```python
-results = beaver.run(
-    dataset="toxicity",
-    model="meta-llama/Llama-3.1-8B-Instruct",
-    auto_server=True,
-    server_port=8000,
 )
 ```
 
@@ -164,6 +153,43 @@ beaver run \
     --model meta-llama/Llama-3.1-8B-Instruct \
     --auto_server
 ```
+
+## 📋 Logging & Results
+
+Every BEAVER run creates a timestamped log directory (default: `logging/logs_<timestamp>/`) containing detailed outputs for inspection and post-hoc analysis.
+
+### Log directory structure
+
+```
+logging/logs_20260316185322/
+├── run_args.json            # Full configuration used for this run
+├── bounds.csv               # Per-instance lower/upper bounds and transition counts
+├── summary.json             # Aggregate statistics across all instances
+├── console.log              # Full console output captured during the run
+├── profiling_summary.json   # Timing breakdowns (per-transition and per-instance)
+├── server_cmd.txt           # vLLM server command (if auto_server was used)
+├── server_config.json       # Resolved server configuration
+├── server.log               # vLLM server stdout/stderr
+├── <idx>.jsonl              # Per-instance transition log (one JSON object per step)
+└── <idx>.profile.json       # Per-instance timing profile (one entry per step)
+```
+
+### Key files
+
+- **`bounds.csv`** — Quick overview of results. Each row contains `idx`, `lower_bound`, `upper_bound`, and `num_transitions` for one instance.
+- **`summary.json`** — Aggregated metrics: average bounds, transition counts, and constraint satisfaction rates at a configurable threshold.
+- **`<idx>.jsonl`** — Detailed per-transition log for instance `idx`, including expanded tokens, decoded text, current bounds, and frontier state at each step.
+- **`<idx>.profile.json`** — Timing breakdown per transition (model generation, grammar masking, semantic checks, frontier updates, etc.).
+
+### Summarizing logs after a run
+
+Use the `beaver logs` CLI command to re-summarize any previous run:
+
+```bash
+beaver logs logging/logs_20260316185322/
+```
+
+This prints aggregate statistics (average bounds, transition counts, constraint satisfaction) and saves `summary.json` and `profiling_summary.json` to the log directory.
 
 ## 📦 Built-in Datasets
 
@@ -234,21 +260,22 @@ beaver run --experiment experiments/my_eval/experiment.yaml \
 | Argument                          | Default           | Description                                                           |
 | --------------------------------- | ----------------- | --------------------------------------------------------------------- |
 | `verifier`                        | `frontier`        | `frontier` (branch-and-bound) or `sampling` (Monte Carlo)             |
-| `gen_length`                      | `128`             | Max tokens per generated sequence                                     |
+| `gen_length`                      | `32`              | Max tokens per generated sequence                                     |
 | `epsilon`                         | `0.01`            | Convergence threshold — stop when `PUB − PLB ≤ ε`                     |
-| `max_iterations`                  | `1000`            | Hard iteration cap per instance                                       |
+| `max_iterations`                  | `100`             | Hard iteration cap per instance                                       |
 | `max_frontier_size`               | `10000`           | Max partial sequences tracked in the frontier                         |
+| `max_frontier_prob`               | `1.0`             | Max cumulative probability tracked in the frontier                    |
 | `frontier_scoring_strategy`       | `highest-prob`    | `highest-prob` \| `length-bias` \| `random-select` \| `sample-select` |
-| `num_logprobs`                    | `500`             | Top-k log-probs requested per expansion step                          |
+| `num_logprobs`                    | `100`             | Top-k log-probs requested per expansion step                          |
 | `use_grammar`                     | `false`           | Apply EBNF grammar mask during expansion                              |
 | `grammar`                         | —                 | `rust` \| `python` \| `c` \| `go` \| path to `.lark` file             |
 | `temperature` / `top_p` / `top_k` | `1.0 / 0.99 / -1` | Sampling distribution parameters                                      |
 | `use_chat_template`               | `true`            | Apply the model's chat template to prompts                            |
 | `system_message`                  | —                 | Global system message (can be overridden per-instance via `system_prompt` key) |
 | `fewshot_messages`                | `[]`              | Global few-shot examples (can be overridden per-instance via `fewshot_messages` key) |
-| `max_workers`                     | `1`               | Parallel worker processes                                             |
+| `max_workers`                     | `16`              | Parallel worker processes                                             |
 | `cache`                           | `false`           | Enable SQLite constraint-result cache                                 |
-| `auto_server`                     | `false`           | Start/stop vLLM server automatically                                  |
+| `auto_server`                     | `true`            | Start/stop vLLM server automatically                                  |
 
 </details>
 

@@ -1,36 +1,3 @@
-"""High-level BEAVER API.
-
-Example — custom constraint::
-
-    import beaver
-
-    results = beaver.run(
-        prompts=[{"question": "What is 2+2?"}],
-        constraint_fn=lambda instance, seq: "4" in seq,
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        server_addr="http://localhost:8000",
-    )
-
-Example — experiment file::
-
-    from experiments.gsm_symbolic.gsm_symbolic import (
-        load_prompts, constraint_fn, check_call_fn, instance_context_fn
-    )
-
-    results = beaver.run(
-        prompts=load_prompts(start_idx=0, end_idx=100),
-        constraint_fn=constraint_fn,
-        check_call_fn=check_call_fn,
-        cache=True,
-        cache_dataset_name="gsm_symbolic",
-        instance_context_fn=instance_context_fn,
-        grammar="gsm",
-        semantic_symbol=">>",
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        auto_server=True,
-    )
-"""
-
 from __future__ import annotations
 
 import json
@@ -398,7 +365,15 @@ def _run_inner(
 
         results = llm(dataset, log_dir)
 
+        ## Show results stats
+        print(f"\n[beaver] Results: {len(results)}")
         print(f"\n[beaver] Run logs: {log_dir}")
+        ## Save bound results in CSV
+        bounds = sorted([(r["idx"], r["lower_bound"], r["upper_bound"], r["transition"]) for r in results], key=lambda x: x[0])
+        with open(log_dir / "bounds.csv", "w") as f:
+            f.write("idx,lower_bound,upper_bound,num_transitions\n")
+            for idx, lower, upper, num_transitions in bounds:
+                f.write(f"{idx},{lower},{upper},{num_transitions}\n")
         all_data = get_log_data(log_dir)
         if all_data:
             summarize_log_data(all_data, log_dir)

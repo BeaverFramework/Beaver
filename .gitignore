@@ -11,3 +11,5 @@ src/iter_cache/
 src/checkpoints/
 beaver_logs/
 logging/
+*.egg-info/
+*.dist-info/
