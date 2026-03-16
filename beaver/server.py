@@ -148,6 +148,7 @@ def _build_server_command(
     env = os.environ.copy()
     if visible_devices is not None:
         env["CUDA_VISIBLE_DEVICES"] = str(visible_devices)
+        print(f"CUDA_VISIBLE_DEVICES={visible_devices}")
 
     model_id = model_cfg["model"]
     cmd = ["vllm", "serve", model_id, "--port", str(port)]

@@ -243,7 +243,7 @@ def load_prompts(
         data.append(
             {
                 "idx": i,
-                "question": p["text"],
+                "prompt": p["text"],
                 "system_prompt": sys_prompt,
                 "stereotype_topic_tag": p["stereotype_topic_tag"],
                 "demographic_group_tag": p["demographic_group_tag"],

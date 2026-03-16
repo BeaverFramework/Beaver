@@ -53,7 +53,13 @@ def load_prompts(
         end = end_idx if end_idx != -1 else len(ds)
         ds = ds.select(range(start_idx, end))
 
-    return [dict(row) for row in ds]
+
+    data = []
+    for row in ds:
+        d = dict(row)
+        d["prompt"] = d.pop("question")
+        data.append(d)
+    return data
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────────

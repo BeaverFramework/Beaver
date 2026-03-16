@@ -20,7 +20,7 @@ from beaver.verifiers.worker_common import (
 @safe_worker
 def _worker_process_instance(args):
     """Top-level function for multiprocessing — processes a single instance."""
-    instance, prompt_ids, log_file, profile_log_file = worker_setup(args)
+    instance, log_file, profile_log_file = worker_setup(args)
 
     # No need for sample_token function anymore - server does the sampling!
 
@@ -40,9 +40,8 @@ def _worker_process_instance(args):
 
         model_start = time.time()
         token_ids, token_logprobs = model_sample_sequence(
-            prompt_ids,
+            instance,
             min(_w.gen_length, transitions_remaining),
-            system_prompt=instance.get("system_prompt"),
         )
 
         total_transitions += len(token_ids)
@@ -138,7 +137,7 @@ class SamplingVerifier(BaseVerifier):
 
     def __call__(self, dataset, run_log_dir):
         config = self._build_worker_config()
-        dataset = self._tokenize_dataset(dataset)
+        # dataset = self._tokenize_dataset(dataset)
         return self._run_pool(
             dataset,
             run_log_dir,

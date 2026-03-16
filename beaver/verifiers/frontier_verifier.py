@@ -2,7 +2,7 @@
 
 import time
 import torch
-
+import json
 import numpy as np
 
 from beaver.constraints.base_constraints import (
@@ -27,7 +27,7 @@ from beaver.verifiers.worker_common import (
 @safe_worker
 def _worker_process_instance(args):
     """Top-level function for multiprocessing — processes a single instance."""
-    instance, prompt_ids, log_file, profile_log_file = worker_setup(args)
+    instance, log_file, profile_log_file = worker_setup(args)
 
     def update_frontier(frontier, previous_element, log_probs, bit_mask):
         """Expand a frontier element, filtering by grammar + semantics.
@@ -61,7 +61,7 @@ def _worker_process_instance(args):
             print(f"Valid indices {len(valid_indices)}")
 
         if len(valid_indices) == 0:
-            return [], 0.0, 0.0, 0, 0, 0
+            return [], 0, 0, 0, 0
 
         # Create a dict for fast logprob lookup: {token_id: logprob}
         logprobs_dict = {
@@ -141,10 +141,10 @@ def _worker_process_instance(args):
         )
         non_violations = set(valid_indices) - set(violations)
 
+        total_violation_prob = np.sum(np.exp(np.array([previous_element.logprob + logprobs_dict[v] for v in violations]))).item()
+
         # Build new frontier elements
         new_elements = []
-        delta_incomplete_prob_sum = 0.0
-        delta_complete_prob_sum = 0.0
 
         for idx in range(len(non_violations)):
 
@@ -157,88 +157,21 @@ def _worker_process_instance(args):
                 logprob=previous_element.logprob + logprobs_dict[token_id],
                 is_completed=complete_flag[idx].item(),
             )
-            if complete_flag[idx].item():
-                delta_complete_prob_sum += np.exp(new_elem.logprob)
-            else:
-                delta_incomplete_prob_sum += np.exp(new_elem.logprob)
+
             frontier.total_elements += 1
             new_elements.append(new_elem)
 
         return (
             new_elements,
-            delta_incomplete_prob_sum,
-            delta_complete_prob_sum,
             presemantic_check_time,
             semantic_check_time,
             len(violations),
-        )
-
-    def expand_sequence(sequence, frontier):
-        model_start = time.time()
-        model_logprobs = model_generate_next_token_logprobs(
-            prompt_ids, sequence.tokens, system_prompt=instance.get("system_prompt")
-        )
-        logprobs, reduced_logprobs = apply_top_p_top_k(model_logprobs)
-        model_end = time.time()
-        # Calculate culled probability: tokens not in the returned logprobs
-
-        culled_prob_sum = np.exp(sequence.logprob) * max(
-            1 - np.sum(np.exp(logprobs[:, 1])), 0.0
-        )
-
-        vocab_mask = get_grammar_mask(sequence.tokens)
-        grammar_decode_end = time.time()
-        (
-            new_elements,
-            delta_incomplete_prob_sum,
-            delta_complete_prob_sum,
-            presemantic_check_time,
-            semantic_check_time,
-            num_violations,
-        ) = update_frontier(frontier, sequence, logprobs, vocab_mask)
-
-        prefrontier_add_time = time.time()
-
-        frontier.add_to_element(sequence, new_elements)
-        update_frontier_end = time.time()
-
-        frontier_pruned_prob = frontier.prune_incomplete_leaves(
-            topp=_w.frontier_topp, topk=_w.frontier_topk
-        )
-        prune_frontier_end = time.time()
-
-        delta_incomplete_prob_sum -= np.exp(sequence.logprob)
-        delta_incomplete_prob_sum += culled_prob_sum
-        culled_prob_sum = frontier_pruned_prob + culled_prob_sum
-
-        log_profiling(
-            {
-                "model_generate": model_end - model_start,
-                "grammar_decode": grammar_decode_end - model_end,
-                "presemantic_check": presemantic_check_time - grammar_decode_end,
-                "semantic_check": semantic_check_time - presemantic_check_time,
-                "prefrontier_add": prefrontier_add_time - semantic_check_time,
-                "update_frontier": update_frontier_end - grammar_decode_end,
-                "prune_frontier": prune_frontier_end - update_frontier_end,
-                "total_time": prune_frontier_end - model_start,
-            },
-            profile_log_file,
-        )
-
-        if _w.verbose:
-            frontier.debug_frontier(_w.tokenizer)
-            breakpoint()
-
-        return (
-            delta_incomplete_prob_sum,
-            delta_complete_prob_sum,
-            culled_prob_sum,
-            num_violations,
-            len(new_elements),
+            total_violation_prob,
         )
 
     # ── Main processing logic ────────────────────────────────────────
-    instance_start = time.time()
+
+    instance_start_time = time.time()
     transitions = 0
     frontier = Frontier(
         max_size=_w.gen_length,
@@ -247,63 +180,114 @@ def _worker_process_instance(args):
     incomplete_prob_sum = 1.0
     complete_prob_sum = 0.0
     pruned_prob_sum = 0.0
+    violation_prob_sum = 0.0
+
+    running_results = {}
 
     while transitions < _w.max_iterations:
-        element = frontier.pick_top_incomplete()
 
+        # each step of frontier verification
+        #
+        # pick the top incomplete element from the frontier
+        start_step_time = time.time()
+        element = frontier.pick_top_incomplete()
         if element is None:
             if _w.verbose:
                 print(f"Frontier is empty at transition {transitions}")
             break
 
-        start_time = time.time()
-        (
-            delta_incomplete_prob_sum,
-            delta_complete_prob_sum,
-            delta_pruned_prob_sum,
-            num_violations,
-            num_new_elements,
-        ) = expand_sequence(element, frontier)
+        model_generate_time = time.time()
+        model_logprobs, final_prompt = model_generate_next_token_logprobs(instance, element.tokens)
+        logprobs, reduced_logprobs = apply_top_p_top_k(model_logprobs)
 
-        incomplete_prob_sum += delta_incomplete_prob_sum
+        # Calculate pruned prob (from tokens that are not counted)
+        culled_prob_sum = np.exp(element.logprob) * max(
+            1 - np.sum(np.exp(logprobs[:, 1])), 0.0
+        )
+        check_validity_time = time.time()
+
+        vocab_mask = get_grammar_mask(element.tokens)
+
+        (
+            new_elements,
+            presemantic_check_time,
+            semantic_check_time,
+            num_violations,
+            total_violation_prob,
+        ) = update_frontier(frontier, element, logprobs, vocab_mask)
+
+        frontier.add_to_element(element, new_elements)
+
+        frontier_pruned_prob = frontier.prune_incomplete_leaves(
+            topp=_w.frontier_topp, topk=_w.frontier_topk
+        )
+
+        update_results_time = time.time()
+
+        incomplete_prob_sum -= np.exp(element.logprob)
+        incomplete_prob_sum -= frontier_pruned_prob
+        for elem in new_elements:
+            if elem.is_completed:
+                complete_prob_sum += np.exp(elem.logprob)
+            else:
+                incomplete_prob_sum += np.exp(elem.logprob)
+
         incomplete_prob_sum = max(
             incomplete_prob_sum, 0.0
         )  # Guard against negative probabilities
-        complete_prob_sum += delta_complete_prob_sum
-        pruned_prob_sum += delta_pruned_prob_sum
+        complete_prob_sum = min(
+            complete_prob_sum, 1.0
+        )  # Guard against probabilities > 1.0
 
-        end_time = time.time()
-        transitions += 1
+        pruned_prob_sum += culled_prob_sum + frontier_pruned_prob
 
-        # Log transition results (always to file, print only in verbose)
+        violation_prob_sum += total_violation_prob
+
+        upper_bound = incomplete_prob_sum + complete_prob_sum + pruned_prob_sum
+
+        lower_bound = complete_prob_sum
+
+        end_step_time = time.time()
         running_results = {
             "transition": transitions,
             "expanded element": element.tokens,
             "decoded element": _w.tokenizer.decode(
                 element.tokens, skip_special_tokens=False
             ),
+            "exact_prompt": final_prompt,
+            "num_violations": num_violations,
+            "total_violation_prob": total_violation_prob,
+            "num_new_elements": len(new_elements),
+            "incomplete_size": len(frontier._incomplete_leaves),
+            "complete_size": len(frontier._complete_leaves),
             "incomplete prob sum": incomplete_prob_sum,
             "complete prob sum": complete_prob_sum,
             "pruned prob sum": pruned_prob_sum,
-            "num_violations": num_violations,
-            "num_new_elements": num_new_elements,
-            "incomplete_size": len(frontier._incomplete_leaves),
-            "complete_size": len(frontier._complete_leaves),
+            "upper_bound": upper_bound,
+            "lower_bound": lower_bound,
         }
         log_json(running_results, log_file)
+        profiling_data = {
+            "element_selection_time": model_generate_time - start_step_time,
+            "model_generate": check_validity_time - model_generate_time,
+            "grammar_mask": presemantic_check_time - check_validity_time,
+            "semantic_check": semantic_check_time - presemantic_check_time,
+            "frontier_add": update_results_time - semantic_check_time,
+            "check_validity": update_results_time - check_validity_time,
+            "update_results": end_step_time - update_results_time,
+            "total_time": end_step_time - start_step_time,
+        }
+        log_profiling(
+            profiling_data,
+            profile_log_file,
+        )
 
         if _w.verbose:
-            iter_time = end_time - start_time
-            print(
-                f"Instance {instance['idx']} transition: {transitions} "
-                f"incomplete_prob: {incomplete_prob_sum} "
-                f"complete_prob: {complete_prob_sum} "
-                f"({iter_time:.3f}s)"
-            )
-            for k, v in running_results.items():
-                print(f"\t{k}: {v}")
+            print(json.dumps(running_results, indent=2))
+            frontier.debug_frontier(_w.tokenizer)
 
-            breakpoint()
+
+        transitions += 1
 
         if pruned_prob_sum > 10 * _w.epsilon:
             raise RuntimeError(
@@ -318,13 +302,12 @@ def _worker_process_instance(args):
                 )
             break
 
+
+    instance_end_time = time.time()
     return {
         "idx": instance["idx"],
-        "transitions": transitions,
-        "time_s": time.time() - instance_start,
-        "incomplete_prob": incomplete_prob_sum,
-        "complete_prob": complete_prob_sum,
-        "pruned_prob": pruned_prob_sum,
+        **running_results,
+        "instance_run_time" : instance_end_time - instance_start_time,
     }
 
 
@@ -343,7 +326,7 @@ class FrontierVerifier(BaseVerifier):
         config["frontier_topk"] = self.frontier_topk
         config["frontier_scoring_strategy"] = self.frontier_scoring_strategy
 
-        dataset = self._tokenize_dataset(dataset)
+        # dataset = self._tokenize_dataset(dataset)
 
         # Handle origin_code field (secure_code dataset)
         for i in range(len(dataset)):

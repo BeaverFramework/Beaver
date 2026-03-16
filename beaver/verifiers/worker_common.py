@@ -120,42 +120,50 @@ def init_worker_state(config_dict):
 # ---------------------------------------------------------------------------
 
 
-def build_prompt_with_chat_template(input_ids, continuation, system_prompt=None):
+def build_prompt(instance, continuation):
+    """Build the final prompt string sent to the vLLM completions API.
+
+    Args:
+        instance: Dict with at least ``prompt`` (string). May also contain
+            ``system_prompt`` and ``fewshot_messages`` (per-instance overrides).
+        continuation: List of token IDs generated so far (the partial sequence
+            being extended).
+
+    Returns:
+        The prompt string ready for the completions API.
+    """
+    prompt_text = instance["prompt"]
+
     if not _w.chat_mode:
-        # No chat template, just decode the input_ids
-        return _w.tokenizer.decode(input_ids + continuation, skip_special_tokens=False)
+        if continuation:
+            return prompt_text + _w.tokenizer.decode(continuation, skip_special_tokens=False)
+        return prompt_text
 
     # Build messages list for chat template
     messages = []
 
-    # Use per-instance system_prompt if provided, otherwise fall back to global
-    effective_system = system_prompt if system_prompt else _w.system_message
-    if effective_system:
-        messages.append({"role": "system", "content": effective_system})
+    # System message: per-instance > global > none
+    system = instance.get("system_prompt") or _w.system_message
+    if system:
+        messages.append({"role": "system", "content": system})
 
-    # Add few-shot examples if present
-    if _w.fewshot_messages:
-        for msg in _w.fewshot_messages:
-            # Support two formats:
-            # 1. {"question": "...", "response": "..."} - convert to user/assistant pairs
-            # 2. {"role": "...", "content": "..."} - use directly
-            if "question" in msg and "response" in msg:
-                messages.append({"role": "user", "content": msg["question"]})
-                messages.append({"role": "assistant", "content": msg["response"]})
-            elif "role" in msg and "content" in msg:
-                messages.append(msg)
-            else:
-                raise ValueError(
-                    f"Invalid fewshot message format: {msg}. "
-                    "Expected either {{'question': ..., 'response': ...}} "
-                    "or {{'role': ..., 'content': ...}}"
-                )
+    # Few-shot: per-instance > global > none
+    fewshot = instance.get("fewshot_messages") or _w.fewshot_messages
+    for msg in fewshot:
+        if "prompt" in msg and "response" in msg:
+            messages.append({"role": "user", "content": msg["prompt"]})
+            messages.append({"role": "assistant", "content": msg["response"]})
+        elif "role" in msg and "content" in msg:
+            messages.append(msg)
+        else:
+            raise ValueError(
+                f"Invalid fewshot message format: {msg}. "
+                "Expected {{'prompt': ..., 'response': ...}} "
+                "or {{'role': ..., 'content': ...}}"
+            )
 
-    # Add current user input
-    current_content = _w.tokenizer.decode(input_ids, skip_special_tokens=False)
-    messages.append({"role": "user", "content": current_content})
+    messages.append({"role": "user", "content": prompt_text})
 
-    # Apply chat template
     prompt = _w.tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
@@ -185,35 +193,24 @@ def _reset_client():
     )
 
 
-def model_generate_next_token_logprobs(input_ids, continuation, system_prompt=None):
+def model_generate_next_token_logprobs(instance, continuation):
     """Get next-token logprobs from vLLM server using OpenAI-compatible API.
 
-    Returns a numpy array of shape [N, 2] with [token_id, logprob] pairs.
-    Uses temperature, top_p, top_k from worker config (_w).
-
-    Always uses completions API. If chat_mode=True, applies chat template manually.
-
     Args:
-        input_ids: List of token IDs for the prompt
+        instance: Instance dict (must have ``prompt``; may have
+            ``system_prompt``, ``fewshot_messages``).
+        continuation: List of token IDs generated so far.
 
     Returns:
-        np.ndarray: Array of shape [N, 2] with [token_id, logprob] pairs
-
-    Raises:
-        Exception: If server request fails after retries
+        (np.ndarray, str): ``(logprobs_array, prompt)`` where logprobs_array
+        has shape [N, 2] with [token_id, logprob] pairs, and prompt is the
+        final string sent to the server.
     """
     for attempt in range(_MODEL_MAX_RETRIES):
         try:
-            start_prompt_time = time.time()
-            prompt = build_prompt_with_chat_template(
-                input_ids, continuation, system_prompt=system_prompt
-            )
-            end_prompt_time = time.time()
+            prompt = build_prompt(instance, continuation)
 
             if _w.verbose:
-                print(
-                    f"[Worker] model_generate prompt time: {end_prompt_time - start_prompt_time:.3f}s"
-                )
                 print(f"prompt: {prompt}")
 
             response = _w.client.completions.create(
@@ -222,21 +219,14 @@ def model_generate_next_token_logprobs(input_ids, continuation, system_prompt=No
                 max_tokens=1,
                 temperature=_w.temperature,
                 logprobs=min(_w.num_logprobs, _w.vocab_size),
-                # stop=[],  # Disable automatic stop tokens
+                stop=[],
                 extra_body={
                     "chat_template_kwargs": {"enable_thinking": False},
                 },
             )
-            end_request_time = time.time()
-            if _w.verbose:
-                print(
-                    f"[Worker] model_generate request time: {end_request_time - end_prompt_time:.3f}s"
-                )
 
             # Extract logprobs from response
             logprobs_obj = response.choices[0].logprobs
-
-            # Completions API: logprobs.top_logprobs is a list of dicts
             if (
                 logprobs_obj is None
                 or not hasattr(logprobs_obj, "top_logprobs")
@@ -248,7 +238,6 @@ def model_generate_next_token_logprobs(input_ids, continuation, system_prompt=No
                 )
             top_logprobs_dict = logprobs_obj.top_logprobs[0]
 
-            # Convert dict {token: logprob} to [[token_id, logprob], ...]
             logprobs = []
             for key, logprob in top_logprobs_dict.items():
                 if key.startswith("token_id:"):
@@ -260,16 +249,11 @@ def model_generate_next_token_logprobs(input_ids, continuation, system_prompt=No
                     "No token_id logprobs found in response. "
                     "Check if server was started with --max-logprobs flag."
                 )
-            end_parse_time = time.time()
 
             if _w.verbose:
-                print(f"model response: {response}")
                 print(f"model response logprobs: {logprobs}")
-                print(
-                    f"[Worker] model_generate parse time: {end_parse_time - end_request_time:.3f}s"
-                )
 
-            return np.array(logprobs)
+            return np.array(logprobs), prompt
 
         except Exception:
             if attempt == _MODEL_MAX_RETRIES - 1:
@@ -287,91 +271,56 @@ def model_generate_next_token_logprobs(input_ids, continuation, system_prompt=No
             time.sleep(delay)
 
 
-def model_sample_sequence(input_ids, max_tokens, system_prompt=None):
-    """Sample multiple tokens from vLLM server.
-
-    For sampling verifier - generates a sequence of tokens with their logprobs.
-    Server applies temperature/top_p/top_k before sampling.
-
-    Always uses completions API. If chat_mode=True, applies chat template manually.
+def model_sample_sequence(instance, max_tokens):
+    """Sample a full sequence from vLLM server.
 
     Args:
-        input_ids: List of token IDs for the prompt
-        max_tokens: Maximum number of tokens to generate
+        instance: Instance dict (must have ``prompt``; may have
+            ``system_prompt``, ``fewshot_messages``).
+        max_tokens: Maximum number of tokens to generate.
 
     Returns:
-        tuple: (token_ids_list, token_logprobs_list) where:
-            - token_ids_list: List of generated token IDs
-            - token_logprobs_list: List of logprobs for each token
-
-    Raises:
-        Exception: If server request fails after retries
+        (list[int], list[float]): ``(token_ids, token_logprobs)``.
     """
     for attempt in range(_MODEL_MAX_RETRIES):
         try:
-            # Build prompt (applies chat template if chat_mode=True)
-            start_prompt_time = time.time()
-            prompt = build_prompt_with_chat_template(
-                input_ids, [], system_prompt=system_prompt
-            )
-            end_prompt_time = time.time()
+            prompt = build_prompt(instance, [])
 
             if _w.verbose:
-                print(
-                    f"[Worker] model_generate prompt time: {end_prompt_time - start_prompt_time:.3f}s"
-                )
                 print(f"prompt: {prompt}")
 
-            # Request sequence generation with logprobs using completions API
             response = _w.client.completions.create(
                 model=_w.model_name,
                 prompt=prompt,
                 max_tokens=max_tokens,
                 temperature=_w.temperature,
                 top_p=_w.top_p,
-                logprobs=1,  # Just need each sampled token's logprob
-                stop=[],  # Disable automatic stop tokens
+                logprobs=1,
+                stop=[],
                 extra_body={
                     "top_k": _w.top_k,
                 },
             )
 
-            end_request_time = time.time()
-            if _w.verbose:
-                print(
-                    f"[Worker] model_generate request time: {end_request_time - end_prompt_time:.3f}s"
-                )
-
-            # Extract the sampled tokens and their logprobs
             choice = response.choices[0]
             logprobs_obj = choice.logprobs
 
-            # Completions API
             if logprobs_obj is None or not logprobs_obj.token_logprobs:
                 return [], []
 
-            # Parse token IDs from 'token_id:123' format
             token_ids = []
             for token_str in logprobs_obj.tokens:
                 if token_str.startswith("token_id:"):
-                    token_id = int(token_str.split(":")[1])
-                    token_ids.append(token_id)
+                    token_ids.append(int(token_str.split(":")[1]))
                 else:
-                    # Shouldn't happen with --max-logprobs set
-                    # Fall back to encoding the token string
                     enc_ids = _w.tokenizer.encode(token_str, add_special_tokens=False)
                     if enc_ids:
                         token_ids.append(enc_ids[0])
 
             token_logprobs = logprobs_obj.token_logprobs
-            end_parse_time = time.time()
 
             if _w.verbose:
-                print(f"model response: {response}")
                 print(f"model response logprobs: {token_ids, token_logprobs}")
-                print(
-                    f"[Worker] model_generate parse time: {end_parse_time - end_request_time:.3f}s"
-                )
 
             return token_ids, token_logprobs
 
@@ -399,28 +348,25 @@ def model_sample_sequence(input_ids, max_tokens, system_prompt=None):
 def worker_setup(args):
     """Common setup for worker process instances.
 
-    Returns (instance, prompt_ids, log_file, profile_log_file).
+    Returns (instance, log_file, profile_log_file).
     """
     instance, run_log_dir = args
 
     assert _w.tokenizer is not None, "Worker tokenizer not initialized"
     assert _w.dataset_name is not None, "Worker dataset_name not initialized"
 
-    prompt_ids = instance["prompt_ids"]
     log_file = run_log_dir / f"{instance['idx']}.jsonl"
     profile_log_file = run_log_dir / f"{instance['idx']}.profile.json"
 
     setup_info = {
         "idx": instance["idx"],
-        "prompt_length": len(prompt_ids),
-        "prompt_ids": prompt_ids,
-        "decoded_prompt": _w.tokenizer.decode(prompt_ids, skip_special_tokens=True),
+        "prompt": instance["prompt"],
         "max_iterations": _w.max_iterations,
         "use_grammar": _w.use_grammar,
     }
     log_json(setup_info, log_file)
 
-    return instance, prompt_ids, log_file, profile_log_file
+    return instance, log_file, profile_log_file
 
 
 # ---------------------------------------------------------------------------

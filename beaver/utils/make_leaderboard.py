@@ -74,6 +74,7 @@ def build_leaderboard(results_dir: Path):
     )
     if not model_dirs:
         raise SystemExit(f"No model directories found under {results_dir}")
+    print(f"Model directories: {model_dirs}")
 
     # Collect all experiment names across all models (preserving order of
     # first appearance, but sorted for determinism).
@@ -86,6 +87,7 @@ def build_leaderboard(results_dir: Path):
 
     if not exp_names:
         raise SystemExit(f"No experiment directories found under {results_dir}")
+    print(f"Experiment names: {exp_names}")
 
     # Determine threshold from the first available summary
     threshold = 0.9  # fallback

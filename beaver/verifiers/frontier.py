@@ -13,7 +13,7 @@ class FrontierElement:
     def __init__(
         self,
         element_id: int,
-        token: Optional[int] = None,
+        token: int,
         tokens: List[int] = [],
         logprob: float = 0.0,
         is_completed: bool = False,
@@ -47,6 +47,7 @@ class FrontierElement:
 class Frontier:
     def __init__(self, max_size: int, scoring_strategy: str = "highest-prob"):
         self.root = FrontierElement(
+            token=-1,
             element_id=0,
         )
         self.total_elements = 1
@@ -122,17 +123,17 @@ class Frontier:
         removed_leaves = self._incomplete_leaves - pruned_set
 
         if len(removed_leaves) > 0:
-            pruned_logprob = np.sum(
+            pruned_prob = np.sum(
                 np.exp(np.array([x.logprob for x in removed_leaves])), axis=0
             )
         else:
-            pruned_logprob = 0.0
+            pruned_prob = 0.0
         for leaf in removed_leaves:
             if leaf.parent is not None:
                 leaf.parent.remove_child(leaf.token)
 
         self._incomplete_leaves = pruned_set
-        return pruned_logprob
+        return pruned_prob
 
     def calc_prob_sum(self):
         incomplete_sum = np.sum(

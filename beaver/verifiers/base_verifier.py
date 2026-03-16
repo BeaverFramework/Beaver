@@ -105,20 +105,6 @@ class BaseVerifier(ABC):
             "check_fn": check_fn,
         }
 
-    def _tokenize_dataset(self, dataset):
-        """Tokenize prompts in dataset. Returns a list of dicts."""
-        dataset = [i for i in dataset]
-        for i in range(len(dataset)):
-            prompt = dataset[i]["prompt"]
-            if isinstance(prompt, list):
-                prompt_ids = self.tokenizer.apply_chat_template(
-                    prompt, tokenize=True, add_generation_prompt=True
-                )
-            else:
-                prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
-            dataset[i]["prompt_ids"] = prompt_ids
-        return dataset
-
     def _run_pool(self, dataset, run_log_dir, worker_fn, init_fn, config):
         """Run worker_fn over dataset using multiprocessing or single-thread.
 

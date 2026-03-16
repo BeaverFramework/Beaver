@@ -33,6 +33,8 @@ def check_call_fn(
     token_lists = np.array(token_lists, dtype=object)
     should_check = token_lists.shape[1] % 10 == 0
     return np.full(len(decoded_sequences), should_check, dtype=bool)
+    return np.full(len(decoded_sequences), True, dtype=bool)
+
 
 
 def _get_context_code(instance: dict) -> str | None:
@@ -125,14 +127,14 @@ def load_prompts(
         item = dict(item)
         item["idx"] = i
         if "instruct" in path:
-            item["question"] = (
+            item["prompt"] = (
                 question_prefix
                 + item["test_case_prompt"].replace("in C", f"in {item['language']}")
                 + f"\nYou must only output code. Nothing but code no other text."
                 f" ALWAYS start with ```{item['language']}\n and end with ```"
             )
         else:
-            item["question"] = question_prefix + item["test_case_prompt"]
+            item["prompt"] = question_prefix + item["test_case_prompt"]
         new_data.append(item)
 
     print(f"Loaded {len(new_data)} secure_code instances for language: {language}")

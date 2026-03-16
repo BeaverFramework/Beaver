@@ -12,17 +12,4 @@ cache_dataset_name: enron
 # ── beaver.run() algorithm params ────────────────────────────────────────────
 verifier: sampling
 gen_length: 16
-use_grammar: false
-temperature: 1.0
-top_p: 0.99
-top_k: -1
-num_logprobs: 100
 max_iterations: 1000
-epsilon: 0.1
-max_frontier_size: 10000
-frontier_scoring_strategy: highest-prob
-use_chat_template: false
-num_shots: 8
-max_workers: 16
-verbose: false
-log_dir: beaver_logs

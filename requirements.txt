@@ -9,7 +9,7 @@ httpx
 openai          # vLLM exposes an OpenAI-compatible API
 tqdm
 jsonlines
-vllm           # vLLM is the underlying inference engine; BEAVER uses its Python API
+# vllm           # vLLM is the underlying inference engine; BEAVER uses its Python API (Commented out so that user installs it separately)
 
 # Visualization (used by beaver logs)
 matplotlib

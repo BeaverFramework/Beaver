@@ -33,17 +33,17 @@
 | 🤖 Works with any HuggingFace model via a vLLM backend                                                   |
 | 🔌 Plug in any binary constraint — one Python function is all you need                                   |
 
-## 🚀 Quick Start
-
-```bash
-pip install -e .
-```
-
 ## ⚙️ Requirements
 
 - Python 3.13+
 - A CUDA-capable GPU (vLLM does not run on CPU)
 - [vLLM](https://github.com/vllm-project/vllm) installed and accessible on `PATH`
+
+## 🚀 Quick Start
+
+```bash
+pip install -e .
+```
 
 ## 🖥️ Running BEAVER
 
@@ -86,7 +86,7 @@ vllm serve google/gemma-3-12b-it \
 import beaver
 
 results = beaver.run(
-    prompts=[{"question": "Write a Python function to parse user input."}],
+    prompts=[{"prompt": "Write a Python function to parse user input."}],
     constraint_fn=lambda instance, seq: valid_prefix(seq),  # Your prefix closed constraint here
     model="meta-llama/Llama-3.1-8B-Instruct",
     auto_server=True,
@@ -100,7 +100,7 @@ results = beaver.run(
 ```python
 # Connect to a running vLLM server instead
 results = beaver.run(
-    prompts=[{"question": "Write a Python function to parse user input."}],
+    prompts=[{"prompt": "Write a Python function to parse user input."}],
     constraint_fn=lambda instance, seq: "eval(" not in seq,
     model="meta-llama/Llama-3.1-8B-Instruct",
     server_addr="http://localhost:8091",
@@ -177,11 +177,22 @@ BEAVER ships with the following datasets used in the paper:
 
 ## ✍️ Writing a Custom Constraint
 
+Each prompt dict must have a `"prompt"` key (string). Optionally include per-instance `"system_prompt"` and/or `"fewshot_messages"` to override the global defaults when using chat mode.
+
 ```python
 # experiments/my_eval/my_eval.py
 
 def load_prompts(**kwargs) -> list[dict]:
-    return [{"question": f"What is {i}+{i}?", "answer": 2*i} for i in range(100)]
+    return [
+        {
+            "prompt": f"What is {i}+{i}?",
+            "answer": 2*i,
+            # Optional per-instance overrides:
+            # "system_prompt": "You are a math tutor.",
+            # "fewshot_messages": [{"prompt": "1+1?", "response": "2"}],
+        }
+        for i in range(100)
+    ]
 
 def constraint_fn(instance: dict, sequence: str) -> bool:
     """True = acceptable, False = violation."""
@@ -233,7 +244,8 @@ beaver run --experiment experiments/my_eval/experiment.yaml \
 | `grammar`                         | —                 | `rust` \| `python` \| `c` \| `go` \| path to `.lark` file             |
 | `temperature` / `top_p` / `top_k` | `1.0 / 0.99 / -1` | Sampling distribution parameters                                      |
 | `use_chat_template`               | `true`            | Apply the model's chat template to prompts                            |
-| `num_shots`                       | `0`               | Number of few-shot examples                                           |
+| `system_message`                  | —                 | Global system message (can be overridden per-instance via `system_prompt` key) |
+| `fewshot_messages`                | `[]`              | Global few-shot examples (can be overridden per-instance via `fewshot_messages` key) |
 | `max_workers`                     | `1`               | Parallel worker processes                                             |
 | `cache`                           | `false`           | Enable SQLite constraint-result cache                                 |
 | `auto_server`                     | `false`           | Start/stop vLLM server automatically                                  |

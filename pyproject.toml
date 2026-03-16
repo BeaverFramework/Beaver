@@ -25,12 +25,11 @@ dependencies = [
     "pandas",
     "llguidance",
     "z3-solver",
-    "vllm>=0.15.1",
+    # "vllm>=0.15.1",
 ]
 
 [project.optional-dependencies]
-secure-code = ["semgrep"]
-classifiers = ["fastapi", "uvicorn", "pydantic", "detoxify"]
+classifiers = ["fastapi", "uvicorn", "pydantic", "detoxify", "semgrep"]
 
 [project.scripts]
 beaver = "beaver.cli:main"

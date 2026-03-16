@@ -123,14 +123,26 @@ def instance_context_fn(instance: dict) -> str:
 
 # ── Data loading ────────────────────────────────────────────────────────────
 
+import os
+import yaml as _yaml
+
+_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "gsm_symbolic_template.yaml")
+
+
+def _load_template():
+    with open(_TEMPLATE_PATH) as f:
+        return _yaml.safe_load(f)
+
 
 def load_prompts(
+    num_shots: int = 8,
     start_idx: int = 0,
     end_idx: int = -1,
     debug_ids: str | list[int] | None = None,
 ) -> list[dict]:
     from datasets import load_dataset
 
+    template = _load_template()
     ds = load_dataset("anon2525/gsms", split="train")
 
     if debug_ids is not None:
@@ -141,7 +153,20 @@ def load_prompts(
         end = end_idx if end_idx != -1 else len(ds)
         ds = ds.select(range(start_idx, end))
 
-    return [dict(row) for row in ds]
+    system_prompt = template["instruction"].strip()
+    fewshot_messages = [
+        {"prompt": shot["question"], "response": shot["response"]}
+        for shot in template["fewshots"][:num_shots]
+    ]
+
+    data = []
+    for row in ds:
+        d = dict(row)
+        d["prompt"] = d.pop("question")
+        d["system_prompt"] = system_prompt
+        d["fewshot_messages"] = fewshot_messages
+        data.append(d)
+    return data
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────────

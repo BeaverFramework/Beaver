@@ -54,6 +54,7 @@ def check_call_fn(instance: dict, decoded_sequences: list[str], token_lists) -> 
     n_tokens = len(token_lists[0]) if len(token_lists) > 0 else 0
     should_check = n_tokens % 10 == 0
     return np.full(len(decoded_sequences), should_check, dtype=bool)
+    # return np.full(len(decoded_sequences), True, dtype=bool)
 
 
 def constraint_fn(instance: dict, seq: str) -> bool:
@@ -101,7 +102,7 @@ def load_prompts(
         data.append(
             {
                 "idx": i,
-                "question": template["task_desc"] + item["prompt"]["text"],
+                "prompt": template["task_desc"] + item["prompt"]["text"],
                 "system_prompt": template["sys_prompt"],
                 "template_id": template_id,
                 "classifier_addr": classifier_addr,
