@@ -13,3 +13,15 @@ beaver_logs/
 logging/
 *.egg-info/
 *.dist-info/
+temp/
+*.pt
+.DS_Store
+# Datasets are not shipped; build/download them (see README, "Datasets")
+experiments/*/data/*.json
+experiments/*/data/*.jsonl
+experiments/*/data/*.csv
+experiments/*/data/*.pkl
+tv_out/
+repr_out/
+cost_out/
+.residual_cache/

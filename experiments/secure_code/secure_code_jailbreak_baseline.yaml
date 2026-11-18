@@ -13,7 +13,7 @@ cache_dataset_name: secure_code
 language: rust
 dataset_path: null
 question_prefix: ""
-question_prefix_file: data/prompt_prefix_instruct.txt
+question_prefix_file: prompt_prefix_instruct.txt
 
 # ── Grammar ───────────────────────────────────────────────────────────────────
 grammar: rust
@@ -29,7 +29,7 @@ num_logprobs: 100
 max_iterations: 1000
 epsilon: 0.1
 max_frontier_size: 10000
-frontier_scoring_strategy: highest-prob
+frontier_scoring_strategy: max-mu
 use_chat_template: false
 num_shots: 8
 max_workers: 16

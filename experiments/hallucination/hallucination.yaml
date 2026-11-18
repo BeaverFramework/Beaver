@@ -21,7 +21,7 @@ num_logprobs: 100
 max_iterations: 100
 epsilon: 0.1
 max_frontier_size: 10000
-frontier_scoring_strategy: highest-prob
+frontier_scoring_strategy: max-mu
 use_chat_template: false
 num_shots: 8
 max_workers: 16

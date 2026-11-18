@@ -1,0 +1,33 @@
+# Enron privacy on the SYNTACTIC-VARIATION space -- a prompt space that is NOT
+# constructed as contexts around a shared base request.
+#
+# Built by experiments/enron/build_syntactic_space.py: 240 prompts, no system
+# prompt anywhere, request BODY varies (wording / template / exemplar phrasing /
+# separators / shot order / question form). 8 paraphrase cells (one person, 20
+# renderings each) + 4 refusal-attractor cells (every slot a different person AND
+# a different question, including non-email asks). Within a paraphrase cell the
+# mean shared prompt prefix is 0.9 characters, vs 487 identical characters in the
+# old enron_tv_families_* construction.
+#
+# Grouping (Qwen3-4B-Instruct-2507, k=5, eps=0.01, verified max intra-group TV
+# 0.0086): 240 -> 94 groups, max 30, mean 2.55, 68 singletons.
+#
+# This is the BASELINE config (no early completion). See
+# enron_syntactic_earlystop.yaml for the variant that terminates committed
+# non-answers early.
+#
+# Enron's constraint is a regex email-membership check (CPU) -- no classifier
+# server needed, so no --classifier_addr.
+
+experiment_file: enron.py
+load_prompts_fn: load_prompts
+constraint_fn: constraint_fn
+check_call_fn: check_call_fn
+instance_context_fn: instance_context_fn
+cache: true
+cache_dataset_name: enron_syntactic
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+# verifier is overridden per arm on the command line (frontier | cachedfrontier).
+verifier: frontier
+gen_length: 16

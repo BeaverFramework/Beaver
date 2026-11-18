@@ -5,8 +5,8 @@ Quick start:
     import beaver
 
     results = beaver.run(
-        prompts=[{"question": "What is 2+2?"}],
-        constraint_fn=lambda instance, seq: "4" in seq,
+        prompts=[{"prompt": "What is 2+2?"}],
+        constraint_fn=lambda instance, seqs: ["4" in s for s in seqs],
         model="meta-llama/Llama-3.1-8B-Instruct",
         server_addr="http://localhost:8000",
     )

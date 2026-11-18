@@ -1,0 +1,15 @@
+# secure_code_new.yaml with Phi = CyberSecEval's ICD as it was when the
+# autocomplete dataset was labelled (regex + weggli, no semgrep), via
+# secure_code.weggli_constraint / ext_constraint_fn. Needs weggli built from
+# main for -n (cargo install --git https://github.com/weggli-rs/weggli).
+experiment_file: secure_code.py
+load_prompts_fn: load_prompts
+constraint_fn: weggli_constraint
+check_call_fn: line_check_call_fn
+instance_context_fn: instance_context_fn
+cache: true
+cache_dataset_name: secure_code_weggli
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+verifier: cachedfrontier
+gen_length: 32

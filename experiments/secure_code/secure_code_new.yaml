@@ -1,0 +1,24 @@
+# Cached-frontier verifier on the TV@k=5 clustered version of the 12x50
+# mild-variation distribution (experiments/secure_code/data/tv_families_12x50_k5_001.json).
+# Grouping was DISCOVERED via k-step greedy-rollout TV clustering (beaver.grouping.tv_k_distance,
+# since removed -- regroup with beaver.grouping.tv_prefix_distance;
+# k=5), not one-step TV and not assigned by base prompt — see tv_out/tv_families_12x50_k5/
+# for the computed distance matrix + cluster labels.
+#
+# Verified: 0/140 groups mix multiple base prompts (vs the one-step baseline's 2 mixed
+# groups / 263 contaminated instances) — every group is a pure sub-family of exactly one
+# of the 12 base prompts. 3 bases (341, 201, 449) stay whole as one 50-member group each;
+# others fragment into many smaller/singleton groups (e.g. base 88 into 42 groups) — no
+# cross-base pollution risk, but expect a long tail of small groups with little/no caching
+# benefit alongside the few large clean groups.
+experiment_file: secure_code.py
+load_prompts_fn: load_prompts
+constraint_fn: constraint_fn
+check_call_fn: check_call_fn
+instance_context_fn: instance_context_fn
+cache: true
+cache_dataset_name: secure_code
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+verifier: cachedfrontier
+gen_length: 64

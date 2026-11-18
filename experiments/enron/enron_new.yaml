@@ -1,0 +1,35 @@
+# Enron email privacy — larger in-domain 5-shot mild-variation distribution
+# (50 targets, 200-member near-identical system-prompt family each = 10000
+# instances), grouped via k-step greedy-rollout TV clustering (k=5).
+#
+# Result: 65 groups from 50 bases (zero mixed-base groups), 4 singletons,
+# largest groups full-size (200), mean group size ~154.
+#
+# Built the same way as experiments/enron/enron_tv_families_12x50_k5.yaml,
+# just larger:
+#   python -m experiments.enron.build_tv_families_distribution \
+#     --output data/enron_tv_families_50x200.json --n-bases 50 --family-size 200
+#   python -m beaver.grouping.tv_prefix_distance \
+#     --dataset experiments/enron/data/enron_tv_families_50x200.json \
+#     --model Qwen/Qwen3-4B-Instruct-2507 --config experiments/enron/enron_new.yaml --server-addr http://localhost:8082 \
+#     --out tv_out/enron_tv_families_50x200_k5
+#   python -m beaver.grouping.tv_visualize \
+#     --matrix tv_out/enron_tv_families_50x200_k5/tv_prefix_distance.npy \
+#     --dataset tv_out/enron_tv_families_50x200_k5/instances.json \
+#     --dataset-out experiments/enron/data/enron_tv_families_50x200_k5_grouped.json \
+#     --threshold 0.01 --out tv_out/enron_tv_families_50x200_k5
+#
+# Enron's constraint is a regex email-membership check (CPU) — no classifier
+# server needed, so no --classifier_addr.
+
+experiment_file: enron.py
+load_prompts_fn: load_prompts
+constraint_fn: constraint_fn
+check_call_fn: check_call_fn
+instance_context_fn: instance_context_fn
+cache: true
+cache_dataset_name: enron
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+verifier: cachedfrontier
+gen_length: 16

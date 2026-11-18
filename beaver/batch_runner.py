@@ -35,6 +35,21 @@ from huggingface_hub import snapshot_download
 
 from beaver import run
 from beaver.server import load_model_config, start_server, stop_server
+
+
+def start_hf_server(*args, **kwargs):
+    # Imported lazily: beaver.hf_server needs fastapi/uvicorn (the optional
+    # `server` extra), which a plain vLLM setup does not install.
+    from beaver.hf_server import start_server
+
+    return start_server(*args, **kwargs)
+
+
+def stop_hf_server(*args, **kwargs):
+    from beaver.hf_server import stop_server
+
+    return stop_server(*args, **kwargs)
+
 from beaver.logging import (
     get_log_data,
     summarize_log_data,
@@ -115,38 +130,61 @@ def generate_summary(exp_base_dir: Path):
 # ── config loading ────────────────────────────────────────────────────────
 
 # Structural keys in experiment YAML — never passed to load_prompts or run()
-_YAML_META_KEYS = frozenset({
-    "experiment_file",
-    "load_prompts_fn",
-    "constraint_fn",
-    "check_call_fn",
-    "instance_context_fn",
-    "cache",
-    "cache_dataset_name",
-    "grammar",
-    "semantic_symbol",
-})
+_YAML_META_KEYS = frozenset(
+    {
+        "experiment_file",
+        "load_prompts_fn",
+        "constraint_fn",
+        "check_call_fn",
+        "instance_context_fn",
+        "cache",
+        "cache_dataset_name",
+        "grammar",
+        "semantic_symbol",
+    }
+)
 
 # Keys that go to beaver.run() as algo/config params
-_BEAVER_RUN_KEYS = frozenset({
-    "verifier",
-    "gen_length",
-    "temperature",
-    "top_p",
-    "top_k",
-    "max_iterations",
-    "epsilon",
-    "max_workers",
-    "num_logprobs",
-    "max_frontier_size",
-    "max_frontier_prob",
-    "frontier_scoring_strategy",
-    "use_grammar",
-    "use_chat_template",
-    "num_shots",
-    "verbose",
-    "log_dir",
-})
+_BEAVER_RUN_KEYS = frozenset(
+    {
+        "verifier",
+        "gen_length",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_iterations",
+        "epsilon",
+        "max_workers",
+        "num_logprobs",
+        "max_frontier_size",
+        "max_frontier_prob",
+        "frontier_scoring_strategy",
+        "use_grammar",
+        "use_chat_template",
+        "backend",
+        "vllm_max_model_len",
+        "vllm_gpu_memory_utilization",
+        "verbose",
+        "log_dir",
+        "nvf_type",
+        "nvf_data_path",
+        "probe_path",
+        "probe_layer",
+        "probe_gpu",
+        "knn_k",
+        "knn_normalize",
+        "direction_layers",
+        "direction_layer_weights",
+        "expand_batch_size",
+        "stopping_criterion",
+        "gate_theta",
+        "gate_pool_size",
+        "gate_warmup",
+        "early_termination_threshold",
+        "prefix_closed",
+        "cache_path",
+    }
+)
 
 
 def load_experiment_config(exp_yaml_path: Path) -> dict[str, Any]:
@@ -281,7 +319,11 @@ def run_experiment(
     check_call_fn_name = exp_cfg.get("check_call_fn")
     check_call_fn = getattr(mod, check_call_fn_name) if check_call_fn_name else None
     instance_context_fn_name = exp_cfg.get("instance_context_fn")
-    instance_context_fn = getattr(mod, instance_context_fn_name) if instance_context_fn_name else None
+    instance_context_fn = (
+        getattr(mod, instance_context_fn_name) if instance_context_fn_name else None
+    )
+    complete_fn_name = exp_cfg.get("complete_fn")
+    complete_fn = getattr(mod, complete_fn_name) if complete_fn_name else None
 
     # ── Build load_prompts kwargs ──────────────────────────────────────────
     load_kwargs = _get_load_prompts_kwargs(load_prompts_fn, exp_cfg)
@@ -316,6 +358,7 @@ def run_experiment(
                 prompts=prompts,
                 constraint_fn=constraint_fn,
                 check_call_fn=check_call_fn,
+                complete_fn=complete_fn,
                 cache=exp_cfg.get("cache", False),
                 cache_dataset_name=exp_cfg.get("cache_dataset_name"),
                 instance_context_fn=instance_context_fn,
@@ -388,6 +431,7 @@ def run_batch(
     gpu_cfg = batch_cfg["gpu"]
     exec_cfg = batch_cfg["execution"]
 
+    server_type = server_cfg.get("type", "vllm")
     base_port = server_cfg.get("base_port", 8000)
     startup_timeout = server_cfg.get("startup_timeout", 300)
     health_interval = server_cfg.get("health_check_interval", 5)
@@ -420,7 +464,10 @@ def run_batch(
         nonlocal server_proc
         print("\n[batch_runner] Shutting down ...")
         if server_proc is not None:
-            stop_server(server_proc)
+            if server_type == "hf":
+                stop_hf_server(server_proc)
+            else:
+                stop_server(server_proc)
             server_proc = None
         if _sig is not None:
             sys.exit(1)
@@ -448,7 +495,9 @@ def run_batch(
                 for cfg in exp_cfgs
             )
             if all_done:
-                _log(f"  All experiments already completed for {model_id} — skipping model")
+                _log(
+                    f"  All experiments already completed for {model_id} — skipping model"
+                )
                 for exp_cfg in exp_cfgs:
                     completed_experiments += 1
                     results.append(
@@ -474,17 +523,27 @@ def run_batch(
                 if gpu_cfg.get("visible_devices") is not None
                 else None
             )
-            _log(f"Starting server for {model_id} ...")
-            server_proc = start_server(
-                model_id,
-                port=base_port,
-                gpu_visible_devices=gpu_visible_devices,
-                startup_timeout=startup_timeout,
-                health_check_interval=health_interval,
-                log_dir=model_log_dir,
-            )
+            _log(f"Starting {server_type} server for {model_id} ...")
+            if server_type == "hf":
+                server_proc = start_hf_server(
+                    model_id,
+                    port=base_port,
+                    gpu_visible_devices=gpu_visible_devices,
+                    startup_timeout=startup_timeout,
+                    health_check_interval=health_interval,
+                    log_dir=model_log_dir,
+                )
+            else:
+                server_proc = start_server(
+                    model_id,
+                    port=base_port,
+                    gpu_visible_devices=gpu_visible_devices,
+                    startup_timeout=startup_timeout,
+                    health_check_interval=health_interval,
+                    log_dir=model_log_dir,
+                )
             if server_proc is None:
-                _log(f"Failed to start server for {model_id}", "ERROR")
+                _log(f"Failed to start {server_type} server for {model_id}", "ERROR")
                 if stop_on_failure:
                     return False
                 continue
@@ -608,7 +667,10 @@ def run_batch(
                                 f.cancel()
                             return False
         finally:
-            stop_server(server_proc)
+            if server_type == "hf":
+                stop_hf_server(server_proc)
+            else:
+                stop_server(server_proc)
             server_proc = None
 
     # ── summary ───────────────────────────────────────────────────────────

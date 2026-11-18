@@ -57,12 +57,21 @@ def get_profile_stats(run_logs_folder: Path, use_median: bool = False):
     if len(profile_json_files) == 0:
         return None
 
+    # Non-timing fields used for joins/filtering (see cached_frontier_verifier.py,
+    # frontier_step.py) -- excluded here since summing/averaging them is
+    # meaningless and non-numeric ones (e.g. "event") crash agg_func outright.
+    metadata_keys = {"event", "idx", "group", "group_position", "transition"}
+
     all_profiles = {}
     for file in profile_json_files:
         file_path = os.path.join(run_logs_folder, file)
         entries = read_log_file(file_path)
         for entry in entries:
             for key, value in entry.items():
+                if key in metadata_keys:
+                    continue
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    continue
                 if key not in all_profiles:
                     all_profiles[key] = []
                 all_profiles[key].append(value)
@@ -238,7 +247,13 @@ def create_combined_time_comparison_plots(
             if profile_file not in all_profile_data:
                 continue
 
-            profile_entries = all_profile_data[profile_file]
+            # CachedFrontierVerifier writes one extra warm_start profiling
+            # entry per instance ahead of the per-transition ones; only the
+            # "transition" entries line up 1:1 with transition_entries.
+            profile_entries = [
+                e for e in all_profile_data[profile_file]
+                if e.get("event", "transition") == "transition"
+            ]
 
             # Ensure we have the same number of transition and profile entries
             if len(transition_entries) != len(profile_entries):

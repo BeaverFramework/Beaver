@@ -1,11 +1,15 @@
-"""GSM Symbolic experiment — math reasoning with symbolic variables."""
+"""GSM Symbolic experiment — math reasoning with symbolic variables.
+
+Data: downloaded on first use from the HuggingFace dataset anon2525/gsms.
+"""
 
 from __future__ import annotations
 
 import re
+import ast
 
 import numpy as np
-
+from concurrent.futures import ProcessPoolExecutor
 
 DATASET_NAME = "gsm_symbolic"
 GRAMMAR = "gsm"
@@ -13,17 +17,31 @@ SEMANTIC_SYMBOL = ">>"
 
 
 # ── Constraint ──────────────────────────────────────────────────────────────
+from z3 import And, If, ToInt, ToReal, Real, Solver, unsat
+
+VAR_PATTERN = re.compile(r"\b[a-zA-Z_]\w*\b")
+INT_SUB_PATTERN = re.compile(r"\bint\(")
+FLOOR_DIV_PATTERN = re.compile(
+    r"(?P<left>[^/]+?)\s*//\s*(?P<right>[^/]+?)(?=\s*[+\-*/%)]|$)"
+)
+
+
+def _z3_floor_div(x, y):
+    return If(y != 0, ToInt(x / y), 0)
 
 
 def _validate_expression_equivalence(expr1, expr2, var_types):
-    from z3 import And, If, ToInt, ToReal, Real, Solver, unsat
-
-    var_names = set(re.findall(r"\b[a-zA-Z_]\w*\b", expr1 + " " + expr2))
-    var_names -= {"int"}
+    # 2. FAST VARIABLE EXTRACTION
+    var_names = set(VAR_PATTERN.findall(expr1 + " " + expr2)) - {
+        "int",
+        "ToInt",
+        "z3_floor_div",
+    }
 
     vars_dict = {}
     constraints = []
 
+    # Z3 definitions
     def _floor(x):
         return If(x >= 0, ToInt(x), ToInt(x) - If(ToReal(ToInt(x)) == x, 0, 1))
 
@@ -33,42 +51,23 @@ def _validate_expression_equivalence(expr1, expr2, var_types):
     for name in var_names:
         var = Real(name)
         vars_dict[name] = var
-        var_type = var_types.get(name, "str")
-        if var_type == "int":
+        v_type = var_types.get(name, "str")
+        if v_type == "int":
+            constraints.extend([var > 0, var == _floor(var), var == _ceiling(var)])
+        elif v_type == "float" or v_type == "float between 0 and 1":
             constraints.append(var > 0)
-            constraints.append(And(var == _floor(var), var == _ceiling(var)))
-        elif var_type == "float":
-            constraints.append(var > 0)
-        elif var_type == "float between 0 and 1":
-            constraints.append(var > 0)
-            constraints.append(var <= 1)
-        elif var_type == "str":
-            continue
-        else:
+            if "between 0 and 1" in v_type:
+                constraints.append(var <= 1)
+        elif v_type != "str":
             return False
 
-    expr1 = re.sub(r"\bint\(", "ToInt(", expr1)
-    expr2 = re.sub(r"\bint\(", "ToInt(", expr2)
+    # 3. FAST STRING PROCESSING
+    expr1 = INT_SUB_PATTERN.sub("ToInt(", expr1)
+    expr2 = INT_SUB_PATTERN.sub("ToInt(", expr2)
 
-    if "round(" in expr1 or "round(" in expr2:
-        return False
-
-    def _convert_floor_div(expression):
-        def replace(match):
-            return f"z3_floor_div({match.group('left').strip()}, {match.group('right').strip()})"
-
-        pattern = r"(?P<left>[^/]+?)\s*//\s*(?P<right>[^/]+?)(?=\s*[+\-*/%)]|$)"
-        prev = None
-        while prev != expression:
-            prev = expression
-            expression = re.sub(pattern, replace, expression)
-        return expression
-
-    expr1 = _convert_floor_div(expr1)
-    expr2 = _convert_floor_div(expr2)
-
-    def _z3_floor_div(x, y):
-        return If(y != 0, ToInt(x / y), 0)
+    for _ in range(3):  # Simple loop is faster than while-prev for shallow nesting
+        expr1 = FLOOR_DIV_PATTERN.sub(r"z3_floor_div(\1, \2)", expr1)
+        expr2 = FLOOR_DIV_PATTERN.sub(r"z3_floor_div(\1, \2)", expr2)
 
     safe_env = {
         "__builtins__": None,
@@ -78,41 +77,165 @@ def _validate_expression_equivalence(expr1, expr2, var_types):
     }
 
     try:
-        expr1_z3 = eval(expr1, safe_env)
-        expr2_z3 = eval(expr2, safe_env)
-    except Exception:
-        return False
-
-    solver = Solver()
-    solver.set("timeout", 5000)
-    solver.add(constraints)
-    try:
-        solver.add(expr1_z3 != expr2_z3)
-    except Exception:
-        return False
-    try:
+        solver = Solver()
+        solver.set("timeout", 5000)
+        solver.add(constraints)
+        solver.add(eval(expr1, safe_env) != eval(expr2, safe_env))
         return solver.check() == unsat
-    except Exception:
+    except:
         return False
 
 
-def check_call_fn(instance: dict, decoded_sequences: list[str], token_lists) -> np.ndarray:
+# def _validate_expression_equivalence(expr1, expr2, var_types):
+
+#     var_names = set(re.findall(r"\b[a-zA-Z_]\w*\b", expr1 + " " + expr2))
+#     var_names -= {"int"}
+
+#     vars_dict = {}
+#     constraints = []
+
+#     def _floor(x):
+#         return If(x >= 0, ToInt(x), ToInt(x) - If(ToReal(ToInt(x)) == x, 0, 1))
+
+#     def _ceiling(x):
+#         return If(x >= 0, ToInt(x) + If(ToReal(ToInt(x)) == x, 0, 1), ToInt(x))
+
+#     for name in var_names:
+#         var = Real(name)
+#         vars_dict[name] = var
+#         var_type = var_types.get(name, "str")
+#         if var_type == "int":
+#             constraints.append(var > 0)
+#             constraints.append(And(var == _floor(var), var == _ceiling(var)))
+#         elif var_type == "float":
+#             constraints.append(var > 0)
+#         elif var_type == "float between 0 and 1":
+#             constraints.append(var > 0)
+#             constraints.append(var <= 1)
+#         elif var_type == "str":
+#             continue
+#         else:
+#             return False
+
+#     expr1 = re.sub(r"\bint\(", "ToInt(", expr1)
+#     expr2 = re.sub(r"\bint\(", "ToInt(", expr2)
+
+#     if "round(" in expr1 or "round(" in expr2:
+#         return False
+
+#     def _convert_floor_div(expression):
+#         def replace(match):
+#             return f"z3_floor_div({match.group('left').strip()}, {match.group('right').strip()})"
+
+#         pattern = r"(?P<left>[^/]+?)\s*//\s*(?P<right>[^/]+?)(?=\s*[+\-*/%)]|$)"
+#         prev = None
+#         while prev != expression:
+#             prev = expression
+#             expression = re.sub(pattern, replace, expression)
+#         return expression
+
+#     expr1 = _convert_floor_div(expr1)
+#     expr2 = _convert_floor_div(expr2)
+
+#     def _z3_floor_div(x, y):
+#         return If(y != 0, ToInt(x / y), 0)
+
+#     safe_env = {
+#         "__builtins__": None,
+#         **vars_dict,
+#         "ToInt": ToInt,
+#         "z3_floor_div": _z3_floor_div,
+#     }
+
+#     try:
+#         expr1_z3 = eval(expr1, safe_env)
+#         expr2_z3 = eval(expr2, safe_env)
+#     except Exception:
+#         return False
+
+#     solver = Solver()
+#     solver.set("timeout", 5000)
+#     solver.add(constraints)
+#     try:
+#         solver.add(expr1_z3 != expr2_z3)
+#     except Exception:
+#         return False
+#     try:
+#         return solver.check() == unsat
+#     except Exception:
+#         return False
+
+
+def check_call_fn(
+    instance: dict, decoded_sequences: list[str], token_lists
+) -> np.ndarray:
     return np.array([(">>" in seq) for seq in decoded_sequences])
 
 
-def constraint_fn(instance: dict, seq: str) -> bool:
-    seq = seq.strip()
-    if "<<" in seq and ">>" in seq:
-        seq = seq.split("<<")[1].split(">>")[0].strip()
-    else:
-        return False
+def constraint_fn(instance: dict, seqs: list[str]) -> list[bool]:
+    # seq = seq.strip()
+    # if "<<" in seq and ">>" in seq:
+    #     seq = seq.split("<<")[1].split(">>")[0].strip()
+    # else:
+    #     return False
 
     expected_answer = instance.get("answer", "")
-    variable_types_str = instance.get("variable_types", "{}")
+    v_types_str = instance.get("variable_types", "{}")
+
     try:
-        variable_types = eval(variable_types_str)
-    except Exception:
-        return False
+        # Use ast.literal_eval for safety and speed over eval()
+        variable_types = ast.literal_eval(v_types_str)
+    except:
+        return [False] * len(seqs)
+
+    cleaned_seqs = []
+    for seq in seqs:
+        s = seq.strip()
+        if "<<" in s and ">>" in s:
+            cleaned_seqs.append(s.split("<<")[1].split(">>")[0].strip())
+
+        else:
+            cleaned_seqs.append(None)  # Mark as invalid
+
+    # with ProcessPoolExecutor() as executor:
+    #     # Create a list of tasks for valid sequences
+    #     future_to_idx = {
+    #         executor.submit(
+    #             _validate_expression_equivalence, s, expected_answer, variable_types
+    #         ): i
+    #         for i, s in enumerate(cleaned_seqs)
+    #         if s is not None
+    #     }
+
+    #     for future in future_to_idx:
+    #         idx = future_to_idx[future]
+    #         try:
+    #             results[idx] = future.result()
+    #         except:
+    #             results[idx] = False
+
+    # for clean_seq in cleaned_seqs:
+    #     if clean_seq is not None:
+    #         results.append(
+    #             _validate_expression_equivalence(
+    #                 clean_seq, expected_answer, variable_types
+    #             )
+    #         )
+    #     else:
+    #         results.append(False)
+    results = [
+        (
+            _validate_expression_equivalence(clean_seq, expected_answer, variable_types)
+            if clean_seq is not None
+            else False
+        )
+        for clean_seq in cleaned_seqs
+    ]
+
+    # try:
+    #     variable_types = eval(variable_types_str)
+    # except Exception:
+    #     return False
 
     return _validate_expression_equivalence(seq, expected_answer, variable_types)
 

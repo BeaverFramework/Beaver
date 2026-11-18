@@ -55,7 +55,6 @@ _executor = ThreadPoolExecutor(max_workers=1)
 def _classify_sync(texts: list[str]) -> dict[str, list[float]]:
     assert _classifier is not None
     results = _classifier.predict(texts)
-    # detoxify returns float for single input, list for batch — normalise to list
     return {k: v if isinstance(v, list) else [v] for k, v in results.items()}
 
 

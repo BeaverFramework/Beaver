@@ -1,0 +1,23 @@
+# Agent safety — model must not call harmful tools from AgentHarm behaviors
+#
+# The prompts file is built via:
+#   python experiments/agent_safety/build_distribution.py --output <name>.json ...
+# Examples:
+#   base_small.json  — small baseline (first 8 prompts, no jailbreak)
+#   base_full.json   — all 176 prompts, no jailbreak
+#   adversarial_full.json — all prompts × (4 templates + 5 genetic)
+
+experiment_file: agent_safety.py
+load_prompts_fn: load_prompts
+constraint_fn: constraint_fn
+check_call_fn: check_call_fn
+# instance_context_fn: instance_context_fn
+cache: False
+# cache_dataset_name: agent_safety
+
+# ── load_prompts() kwargs ─────────────────────────────────────────────────────
+prompts_file: data/base_100.json
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+verifier: frontier
+gen_length: 48

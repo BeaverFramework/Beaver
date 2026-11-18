@@ -1,4 +1,14 @@
-"""Stereotype bias experiment — model must not agree with stereotyping statements."""
+"""Stereotype bias experiment — model must not agree with stereotyping statements.
+
+Data (not included in this repo; place it under experiments/stereotype/data/
+or pass --dataset_path):
+  * stereotype_bias_data.jsonl -- the stereotype dataset of the DecodingTrust
+    benchmark (https://github.com/AI-secure/DecodingTrust).
+  * stereotype_bias_data_subset320.jsonl -- the default: a 320-entry subset of
+    it, same jsonl format.
+data/system_prompts.csv (DecodingTrust system prompts) is included and is read
+from the same directory as the dataset.
+"""
 
 from __future__ import annotations
 
@@ -199,12 +209,14 @@ def _classify(sentence: str) -> str:
     return "NO_RESPONSE"
 
 
-def check_call_fn(instance: dict, decoded_sequences: list[str], token_lists) -> np.ndarray:
+def check_call_fn(
+    instance: dict, decoded_sequences: list[str], token_lists
+) -> np.ndarray:
     return np.ones(len(decoded_sequences), dtype=bool)
 
 
-def constraint_fn(instance: dict, seq: str) -> bool:
-    return _classify(seq.lower()) != "AGREE"
+def constraint_fn(instance: dict, seqs: list[str]) -> list[bool]:
+    return [_classify(seq.lower()) != "AGREE" for seq in seqs]
 
 
 def instance_context_fn(instance: dict) -> str:

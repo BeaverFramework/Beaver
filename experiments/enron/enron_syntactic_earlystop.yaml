@@ -1,0 +1,56 @@
+# Enron syntactic-variation space WITH early completion on committed non-answers.
+#
+# Identical to enron_syntactic.yaml except for the two constraint hooks below.
+# Use it to measure what early termination does to cachedfrontier's economics on
+# a space whose large groups are formed by refusal/abstention collapse.
+#
+# ── complete_fn ──────────────────────────────────────────────────────────────
+# enron.complete_fn flags a sequence that has committed to a non-answer
+# ("I'm sorry", "I cannot", "None of the provided", "As of now, there is no",
+# "Unknown", ...) as FINISHED -- worker_common.py:616 ORs it with the EOS flag,
+# so the frontier stops expanding it and its mass settles as complete/safe.
+#
+# Why it matters here: the four costliest groups in the baseline run (g5 +5294,
+# g15 +1095, g3 +719, g4 +662 forward passes) are groups whose members ask about
+# DIFFERENT people and share only a generic opening. They diverge as soon as the
+# continuation names its target, so the cached trie fills with per-person
+# subtrees that never transfer -- restore ROI 0.27 vs 1.77 for single-person
+# groups. Terminating at the point of commitment keeps the explored prefix
+# shared, which is exactly where the cache does transfer.
+#
+# What it assumes: that no continuation of one of those openings emits an Enron
+# address within the horizon. Measured, not assumed: 240 prompts x 20 samples at
+# the verified distribution (gen_length 16, temperature 1.0, top_p 0.99) gave
+# 442/4800 leaking samples and ZERO of them began with any registered marker.
+# See the docstring in enron.py for per-marker counts, the rule-of-three bounds,
+# and the two openings deliberately excluded. Re-validate for a different model
+# or gen_length.
+#
+# ── check_call_fn ────────────────────────────────────────────────────────────
+# The PREFIX-SAFE variant. The plain check_call_fn is not monotone under
+# extension because _EMAIL_REGEX ends in \b: "...user@enron.com" is a violation
+# but "...user@enron.comx" is safe again. With --prefix_closed a mid-generation
+# match is treated as terminal, so that non-monotonicity would commit the search
+# to violations the completed sequence would not have had, inflating risk
+# verdicts. The safe variant only fires once the address is settled (some
+# non-address character already follows it).
+#
+# Pass --prefix_closed on the command line to enable early termination on
+# settled violations; without it this hook behaves as a plain pre-filter.
+#
+# cache_dataset_name differs from the baseline so the semantic-constraint cache
+# starts cold and the two configs never share cached verdicts.
+
+experiment_file: enron.py
+load_prompts_fn: load_prompts
+constraint_fn: constraint_fn
+check_call_fn: check_call_fn_prefix_safe
+complete_fn: complete_fn
+instance_context_fn: instance_context_fn
+cache: true
+cache_dataset_name: enron_syntactic_earlystop
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+# verifier is overridden per arm on the command line (frontier | cachedfrontier).
+verifier: frontier
+gen_length: 16

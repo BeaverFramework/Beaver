@@ -25,11 +25,57 @@ dependencies = [
     "pandas",
     "llguidance",
     "z3-solver",
+    "scipy",
+    "orjson",
     # "vllm>=0.15.1",
 ]
 
 [project.optional-dependencies]
-classifiers = ["fastapi", "uvicorn", "pydantic", "detoxify", "semgrep"]
+# semgrep is PINNED to 1.79.0 deliberately. Two independent ways a different
+# version breaks secure_code, one loud and one silent:
+#
+#  * >=1.174: the Linux wheel is gone, so pip builds the sdist and the OCaml
+#    semgrep-core binary is simply absent. oss.py resolves that binary at
+#    MODULE IMPORT time, so every secure_code stage dies on
+#    `import secure_code`. Loud, at least.
+#
+#  * 1.157: binary present, rules load, --experimental still accepted -- but
+#    semgrep now scans only git-TRACKED files, and ICD's targets are
+#    NamedTemporaryFile paths outside any repo. The `--project-root /` escape
+#    hatch (INCLUDE_SEMGREP_PROJECT_ROOT_PARAMETER, oss.py:22) is rejected by
+#    this version: "project root '/' does not contain the scanning root".
+#    Result: "Ran 13 rules on 0 files: 0 findings" -- SILENT. Labels quietly
+#    degrade to the regex analyser and a direction fits happily on them.
+#
+# So a version check is not enough; verify semgrep actually FIRES. Run from
+# experiments/secure_code (insecure_code_detector is a bare top-level module
+# there, not part of the beaver package):
+#
+#   python -c "
+#   import asyncio
+#   from insecure_code_detector import insecure_code_detector as icd
+#   from insecure_code_detector.languages import Language
+#   code='import subprocess\ndef f(cmd):\n    subprocess.run(cmd, shell=True)\n'
+#   for i in asyncio.run(icd.analyze(Language.PYTHON, code)): print(i.analyzer, i.pattern_id)"
+#
+# Must print Analyzer.SEMGREP ... insecure-subprocess-using-shell. Do NOT test
+# with a hashlib-md5 payload: _is_semgrep_scan_recommended prescans with
+# regexes and can skip the semgrep pass entirely, so that payload passes even
+# when semgrep is completely broken.
+#
+# Also required: site-packages must be writable (oss.py:52 creates an
+# `osemgrep` symlink next to the binary at import), and TMPDIR must be
+# writable (every candidate becomes a temp file).
+classifiers = ["fastapi", "uvicorn", "pydantic", "detoxify", "semgrep==1.79.0"]
+# backend="hf": beaver.hf_server, the HuggingFace server that can also return
+# hidden states (needed by verifier="representation").
+server = ["fastapi", "uvicorn", "pydantic"]
+# verifier="representation" / "distribution", beaver.activation_detection and
+# backend="hf-local". Fitting directions additionally needs the `heretic`
+# package (see beaver/activation_detection/violation_direction_heretic.py).
+representation = ["scikit-learn", "joblib", "transformer-lens"]
+# beaver.grouping: building grouped datasets for verifier="cachedfrontier".
+grouping = ["scikit-learn", "networkx"]
 
 [project.scripts]
 beaver = "beaver.cli:main"

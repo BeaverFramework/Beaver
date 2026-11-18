@@ -176,39 +176,6 @@ def start_server(
     extra_vllm_args: list[str] | None = None,
     log_dir: Path | str | None = None,
 ) -> subprocess.Popen | None:
-    """Start a vLLM server and wait until it is healthy.
-
-    The server is launched with all flags from
-    ``beaver/configs/models/default.yaml`` (the same defaults used by the
-    batch runner), plus any overrides from *model_config_path*.
-
-    Critical flags that are always applied from the defaults:
-    - ``--max-logprobs -1`` — required for full-vocabulary logprobs
-    - ``--return-tokens-as-token-ids`` — required for token-ID parsing
-    - ``--logprobs-mode processed_logprobs``
-    - ``--trust-remote-code``
-
-    Args:
-        model_id: HuggingFace model ID or local path.
-        port: Port to serve on.  If ``None`` (default), uses the ``port``
-            field from ``configs/models/default.yaml`` (8081), falling back
-            to 8000 if not set.
-        gpu_visible_devices: Comma-separated CUDA device IDs (e.g. ``"0,1"``).
-        startup_timeout: Seconds to wait for the server to become healthy.
-        health_check_interval: Seconds between health-check polls.
-        model_config_path: Optional path to a YAML file with vLLM overrides.
-            Merged on top of the package defaults.  Keys live under a ``vllm:``
-            section, same format as ``configs/models/default.yaml``::
-
-                vllm:
-                  gpu_memory_utilization: 0.90
-                  max_model_len: 8192
-        extra_vllm_args: Raw extra CLI flags appended after all config-derived
-            flags (e.g. ``["--enforce-eager"]``).
-
-    Returns:
-        The server :class:`subprocess.Popen`, or ``None`` if startup failed.
-    """
     model_cfg = load_model_config(model_id, model_config_path)
     if port is None:
         port = int(model_cfg.get("port", 8000))

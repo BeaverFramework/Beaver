@@ -1,4 +1,9 @@
-"""Hallucination experiment — model must give factually correct answers (SimpleQA)."""
+"""Hallucination experiment — model must give factually correct answers (SimpleQA).
+
+Data (not included in this repo): simple_qa_test_set.csv, the SimpleQA test set
+from OpenAI's simple-evals (https://github.com/openai/simple-evals). Place it
+under experiments/hallucination/data/ or pass --dataset_path.
+"""
 
 from __future__ import annotations
 
@@ -148,13 +153,14 @@ def check_call_fn(instance: dict, decoded_sequences: list[str], token_lists) -> 
     return np.full(len(decoded_sequences), should_check, dtype=bool)
 
 
-def constraint_fn(instance: dict, seq: str) -> bool:
+def constraint_fn(instance: dict, seqs: list[str]) -> list[bool]:
     classifier_addr = os.environ.get("BEAVER_CLASSIFIER_ADDR")
     if not classifier_addr:
         raise RuntimeError(
             "BEAVER_CLASSIFIER_ADDR env var not set — pass classifier_addr to load_prompts."
         )
-    return _grade_single(classifier_addr, instance.get("question", ""), instance.get("answer", ""), seq)
+    question, answer = instance.get("question", ""), instance.get("answer", "")
+    return [_grade_single(classifier_addr, question, answer, seq) for seq in seqs]
 
 
 def instance_context_fn(instance: dict) -> str:

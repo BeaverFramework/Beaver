@@ -1,0 +1,24 @@
+# Agent safety — AgentHarm behaviors wrapped with adversarial jailbreak prefixes
+#
+# Build the distribution first:
+#   python experiments/agent_safety/build_distribution.py \
+#       --output adversarial_full.json \
+#       --templates refined_best refined_best_simplified icl_one_shot claude \
+#       --n_genetic 5
+
+experiment_file: agent_safety.py
+load_prompts_fn: load_prompts
+constraint_fn: constraint_fn
+check_call_fn: check_call_fn
+instance_context_fn: instance_context_fn
+cache: true
+cache_dataset_name: agent_safety
+
+# ── load_prompts() kwargs ─────────────────────────────────────────────────────
+prompts_file: data/adv_100.json
+
+# ── beaver.run() algorithm params ────────────────────────────────────────────
+backend: hf
+verifier: sampling
+gen_length: 48
+max_iterations: 1000

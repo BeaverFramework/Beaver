@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+import signal
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -29,6 +30,13 @@ from .languages import Language
 from .usecases import UseCase
 
 LOG: logging.Logger = logging.getLogger(__name__)
+
+# PIDs of currently-running analyzer subprocesses (e.g. semgrep), tracked so an
+# outer hard-timeout watchdog can forcibly reap them if it interrupts execution
+# somewhere that never reaches the asyncio-cancellation cleanup below (e.g. a
+# signal-based timeout firing inside the event loop's own dispatch code rather
+# than inside a coroutine frame).
+LIVE_SUBPROCESS_PIDS: set[int] = set()
 
 try:
     from .internal import oss
@@ -116,45 +124,58 @@ async def analyze(
         is_path_preexisting,
     )
 
-    # Create tasks for each analyzer
-    tasks = []
-
-    # regex analyze
-    if oss.ENABLE_REGEX_ANALYZER and (
-        Analyzer.REGEX in LANGUAGE_ANALYZER_MAP.get(language, [])
-    ):
-        result += _regex_analyze(generated_code, code_context, usecase)
-
-    if usecase == UseCase.CODESHIELD:
-        # fast mode is greedy. returns for any match and doesn't include all matches
-        if len(result) > 0:
-            return result
-
-    # SEMGREP analyze
-    if oss.ENABLE_SEMGREP and (
-        Analyzer.SEMGREP in LANGUAGE_ANALYZER_MAP.get(language, [])
-    ):
-        if usecase == UseCase.CODESHIELD:
-            if not _is_semgrep_scan_recommended(generated_code, code_context, usecase):
-                return result
-        tasks.append(
-            asyncio.create_task(_semgrep_analyze(generated_code, code_context, usecase))
-        )
-
-    # Gather results from all tasks
-    results_from_tasks = await asyncio.gather(*tasks)
-
-    # Flatten the list of results
-    result += [issue for sublist in results_from_tasks for issue in sublist]
-
-    # end of static analysis: clean up
     try:
-        if not is_path_preexisting:
-            os.remove(code_context.path)
-    except OSError:
-        LOG.warn("File created for static analysis could not be deleted.")
+        # Create tasks for each analyzer
+        tasks = []
 
-    return result
+        # regex analyze
+        if oss.ENABLE_REGEX_ANALYZER and (
+            Analyzer.REGEX in LANGUAGE_ANALYZER_MAP.get(language, [])
+        ):
+            result += _regex_analyze(generated_code, code_context, usecase)
+
+        if usecase == UseCase.CODESHIELD:
+            # fast mode is greedy. returns for any match and doesn't include all matches
+            if len(result) > 0:
+                return result
+
+        # SEMGREP analyze
+        if oss.ENABLE_SEMGREP and (
+            Analyzer.SEMGREP in LANGUAGE_ANALYZER_MAP.get(language, [])
+        ):
+            if usecase == UseCase.CODESHIELD:
+                if not _is_semgrep_scan_recommended(generated_code, code_context, usecase):
+                    return result
+            tasks.append(
+                asyncio.create_task(
+                    _semgrep_analyze(generated_code, code_context, usecase)
+                )
+            )
+
+        try:
+            results_from_tasks = await asyncio.gather(*tasks)
+        except BaseException:
+            # On cancellation/error, cancel any still-pending analyzer tasks so
+            # their subprocess children are killed by _run_command's handler
+            # instead of being orphaned.
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+
+        # Flatten the list of results
+        result += [issue for sublist in results_from_tasks for issue in sublist]
+
+        return result
+    finally:
+        # Always clean up the temp file, even on cancellation/timeout.
+        if not is_path_preexisting:
+            try:
+                os.remove(code_context.path)
+            except OSError:
+                LOG.warn("File created for static analysis could not be deleted.")
 
 
 def _is_comment_or_directive(code: str) -> bool:
@@ -216,10 +237,35 @@ def _regex_analyze(
 
 
 async def _run_command(command: list[str]) -> str:
+    # start_new_session=True puts the child in its own process group so a
+    # forced cleanup (ours or the outer LIVE_SUBPROCESS_PIDS watchdog) can
+    # kill the whole group, not just the direct child, in case the analyzer
+    # itself spawns helper processes.
     process = await asyncio.create_subprocess_exec(
-        *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+        *command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        start_new_session=True,
     )
-    stdout, stderr = await process.communicate()
+    LIVE_SUBPROCESS_PIDS.add(process.pid)
+    try:
+        stdout, stderr = await process.communicate()
+    except (asyncio.CancelledError, Exception):
+        # Cancellation (e.g. asyncio.wait_for timeout) does NOT kill the child.
+        # Terminate + wait so the subprocess is reaped rather than left as a
+        # zombie attached to a dying event loop.
+        if process.returncode is None:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                await process.wait()
+            except Exception:
+                pass
+        raise
+    finally:
+        LIVE_SUBPROCESS_PIDS.discard(process.pid)
     if process.returncode != 0:
         LOG.fatal(
             f"Process {' '.join(command)} failed with exit code {process.returncode}\nStdout: {stdout}\nStderr:{stderr}"

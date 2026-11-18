@@ -12,7 +12,7 @@ port: 8081
 vllm:
   tensor_parallel_size: auto # "auto" = use all available GPUs
   max_model_len: 4092
-  gpu_memory_utilization: 0.85
+  gpu_memory_utilization: 0.95
   enable_prefix_caching: true
   # enable_chunked_prefill: true
   # max_num_batched_tokens: 8192
@@ -21,4 +21,4 @@ vllm:
   logprobs_mode: processed_logprobs # Return processed logprobs
   return_tokens_as_token_ids: true # Return token IDs in token_id:123 format
   trust_remote_code: true
-  # enforce_eager: true
+  enforce_eager: true
